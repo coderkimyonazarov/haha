@@ -4,9 +4,20 @@ import { getDb } from "../db";
 import { sessions, users } from "../db/schema";
 import { AppError } from "../utils/error";
 
+type AuthUser = {
+  id: string;
+  email: string | null;
+  name: string;
+  isAdmin: number;
+};
+
 const COOKIE_NAME = "sypev_session";
 
-export async function authOptional(req: Request, _res: Response, next: NextFunction) {
+export async function authOptional(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
   try {
     const sessionId = req.cookies?.[COOKIE_NAME];
     if (!sessionId) {
@@ -25,13 +36,18 @@ export async function authOptional(req: Request, _res: Response, next: NextFunct
     }
 
     const user = await db
-      .select({ id: users.id, email: users.email, name: users.name })
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        isAdmin: users.isAdmin,
+      })
       .from(users)
       .where(eq(users.id, session.userId))
       .get();
 
     if (user) {
-      (req as Request & { user?: { id: string; email: string | null; name: string } }).user = user;
+      (req as Request & { user?: AuthUser }).user = user;
     }
     return next();
   } catch (error) {
@@ -39,7 +55,11 @@ export async function authOptional(req: Request, _res: Response, next: NextFunct
   }
 }
 
-export async function authRequired(req: Request, res: Response, next: NextFunction) {
+export async function authRequired(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   await authOptional(req, res, (err) => {
     if (err) {
       return next(err);
@@ -51,8 +71,19 @@ export async function authRequired(req: Request, res: Response, next: NextFuncti
   });
 }
 
+export async function requireAdmin(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  if (!req.user || req.user.isAdmin !== 1) {
+    return next(new AppError("FORBIDDEN", "Admin access required", 403));
+  }
+  return next();
+}
+
 export function getUserFromRequest(req: Request) {
-  return (req as Request & { user?: { id: string; email: string | null; name: string } }).user || null;
+  return (req as Request & { user?: AuthUser }).user || null;
 }
 
 export function getSessionCookieName() {
