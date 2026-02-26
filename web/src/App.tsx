@@ -3,6 +3,7 @@ import React from "react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { Button } from "./components/ui/button";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { adminMe, adminLogout } from "./api";
 import Admissions from "./routes/Admissions";
 import AdminPanel from "./routes/AdminPanel";
 import Dashboard from "./routes/Dashboard";
@@ -27,8 +28,15 @@ function ProtectedRoute({ children }: { children: React.ReactElement }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactElement }) {
-  const { user, loading } = useAuth();
-  if (loading)
+  const [adminOk, setAdminOk] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    adminMe()
+      .then((data) => setAdminOk(data.admin))
+      .catch(() => setAdminOk(false));
+  }, []);
+
+  if (adminOk === null)
     return (
       <div
         style={{
@@ -45,8 +53,7 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
         Authenticating…
       </div>
     );
-  if (!user) return <Navigate to="/admin/login" replace />;
-  if (user.isAdmin !== 1) return <Navigate to="/admin/login" replace />;
+  if (!adminOk) return <Navigate to="/admin/login" replace />;
   return children;
 }
 

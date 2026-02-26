@@ -1,14 +1,12 @@
 import React from "react";
-import { useNavigate, Link, Navigate } from "react-router-dom";
-import { login } from "../api";
-import { useAuth } from "../lib/auth";
+import { useNavigate, Link } from "react-router-dom";
+import { adminLogin } from "../api";
 import { gsap } from "gsap";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { user, loading, refresh } = useAuth();
 
-  const [identifier, setIdentifier] = React.useState("");
+  const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [errorText, setErrorText] = React.useState("");
@@ -76,44 +74,13 @@ export default function AdminLogin() {
     return () => ctx.revert();
   }, []);
 
-  // If still loading auth, show dark loading screen
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#050505",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#6366f1",
-          fontFamily: "'Space Grotesk', sans-serif",
-          fontSize: 18,
-        }}
-      >
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
-          <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 14 }}>
-            Checking session…
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  // Already logged in as admin → skip login
-  if (user && user.isAdmin === 1) {
-    return <Navigate to="/admin" replace />;
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setErrorText("");
     try {
-      await login({ email: identifier, password });
-      await refresh();
-      // After auth refresh, navigate; AdminRoute will handle guard
+      await adminLogin({ username, password });
+      // Navigate to admin panel; AdminRoute will verify the cookie
       navigate("/admin");
     } catch (err: any) {
       setErrorText(err?.message || "Invalid credentials. Please try again.");
@@ -262,7 +229,7 @@ export default function AdminLogin() {
           onSubmit={handleSubmit}
           style={{ display: "flex", flexDirection: "column", gap: 16 }}
         >
-          {/* Email / identifier */}
+          {/* Username */}
           <div
             className="al-field"
             style={{ display: "flex", flexDirection: "column", gap: 6 }}
@@ -276,13 +243,14 @@ export default function AdminLogin() {
                 color: "rgba(165,180,252,0.6)",
               }}
             >
-              Email
+              Username
             </label>
             <input
               type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="admin@sypev.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="admin"
+              autoComplete="username"
               required
               style={{
                 background: "rgba(255,255,255,0.04)",

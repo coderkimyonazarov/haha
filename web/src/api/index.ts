@@ -158,6 +158,32 @@ export async function getSatTopics() {
   );
 }
 
+// ── Admin Auth ────────────────────────────────────────────────────────────────
+
+export async function adminLogin(payload: {
+  username: string;
+  password: string;
+}) {
+  return apiFetch<{ admin: boolean }>("/api/auth/admin-login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminLogout() {
+  return apiFetch<{ loggedOut: boolean }>("/api/auth/admin-logout", {
+    method: "POST",
+  });
+}
+
+export async function adminMe() {
+  return apiFetch<{ admin: boolean }>(
+    "/api/auth/admin-me",
+    {},
+    { silent: true },
+  );
+}
+
 // ── Admin API ─────────────────────────────────────────────────────────────────
 
 export type AdminStats = {

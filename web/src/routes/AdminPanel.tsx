@@ -1,6 +1,5 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
-import { useAuth } from "../lib/auth";
+import { useNavigate } from "react-router-dom";
 import {
   adminGetStats,
   adminGetUsers,
@@ -9,6 +8,7 @@ import {
   adminGetUniversities,
   adminAddUniversity,
   adminDeleteUniversity,
+  adminLogout,
   type AdminStats,
   type AdminUser,
   type AdminUniversity,
@@ -287,7 +287,7 @@ function AddUniversityModal({
 type Tab = "overview" | "users" | "universities";
 
 export default function AdminPanel() {
-  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
 
   const [tab, setTab] = React.useState<Tab>("overview");
   const [stats, setStats] = React.useState<AdminStats | null>(null);
@@ -297,10 +297,10 @@ export default function AdminPanel() {
   const [loadingData, setLoadingData] = React.useState(false);
   const [showAddUni, setShowAddUni] = React.useState(false);
 
-  // Guard: redirect if not admin
-  if (authLoading)
-    return <div style={{ color: "#888", padding: 40 }}>Loading…</div>;
-  if (!user || user.isAdmin !== 1) return <Navigate to="/dashboard" replace />;
+  async function handleAdminLogout() {
+    await adminLogout().catch(() => {});
+    navigate("/admin/login");
+  }
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   React.useEffect(() => {
@@ -444,12 +444,25 @@ export default function AdminPanel() {
             RESTRICTED
           </span>
         </div>
-        <div
-          className="flex items-center gap-2 text-sm"
-          style={{ color: "rgba(255,255,255,0.5)" }}
-        >
-          <span>👤</span>
-          <span>{user.name}</span>
+        <div className="flex items-center gap-4">
+          <div
+            className="flex items-center gap-2 text-sm"
+            style={{ color: "rgba(255,255,255,0.5)" }}
+          >
+            <span>👤</span>
+            <span>Admin</span>
+          </div>
+          <button
+            onClick={handleAdminLogout}
+            className="rounded-xl px-4 py-2 text-xs font-semibold transition-all hover:opacity-80"
+            style={{
+              background: "rgba(239,68,68,0.15)",
+              color: "#f87171",
+              border: "1px solid rgba(239,68,68,0.25)",
+            }}
+          >
+            Sign Out
+          </button>
         </div>
       </div>
 
