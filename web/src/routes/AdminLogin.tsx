@@ -1,248 +1,461 @@
 import React from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, Navigate } from "react-router-dom";
 import { login } from "../api";
 import { useAuth } from "../lib/auth";
 import { gsap } from "gsap";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { user, loading, refresh } = useAuth();
 
-  const [email, setEmail] = React.useState("");
+  const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
   const [errorText, setErrorText] = React.useState("");
+  const [showPass, setShowPass] = React.useState(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const formRef = React.useRef<HTMLFormElement>(null);
 
   React.useLayoutEffect(() => {
-    if (!containerRef.current || !formRef.current) return;
-
-    // Premium entry animation
+    if (!containerRef.current) return;
     const ctx = gsap.context(() => {
-      gsap.from(".admin-badge", {
-        y: -20,
+      gsap.from(".al-logo", {
+        scale: 0.5,
         opacity: 0,
-        duration: 0.8,
-        ease: "power3.out",
+        duration: 0.7,
+        ease: "back.out(1.7)",
       });
-      gsap.from(".admin-title", {
-        y: 20,
-        opacity: 0,
-        duration: 0.8,
-        delay: 0.1,
-        ease: "power3.out",
-      });
-      gsap.from(".admin-subtitle", {
-        y: 20,
-        opacity: 0,
-        duration: 0.8,
-        delay: 0.2,
-        ease: "power3.out",
-      });
-      gsap.from(formRef.current!.children, {
-        y: 20,
+      gsap.from(".al-title", {
+        y: 24,
         opacity: 0,
         duration: 0.6,
+        delay: 0.15,
+        ease: "power3.out",
+      });
+      gsap.from(".al-sub", {
+        y: 16,
+        opacity: 0,
+        duration: 0.6,
+        delay: 0.25,
+        ease: "power3.out",
+      });
+      gsap.from(".al-field", {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
         stagger: 0.1,
-        delay: 0.3,
+        delay: 0.35,
         ease: "power2.out",
       });
-      // Floating particles background effect
-      gsap.to(".particle", {
-        y: "random(-100, 100)",
-        x: "random(-100, 100)",
-        opacity: "random(0.1, 0.4)",
-        duration: "random(3, 6)",
+      gsap.from(".al-btn", {
+        scale: 0.95,
+        opacity: 0,
+        duration: 0.5,
+        delay: 0.65,
+        ease: "back.out(1.4)",
+      });
+
+      // Animate orbs
+      gsap.to(".al-orb-1", {
+        x: 30,
+        y: -20,
+        duration: 6,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
-        stagger: 0.1,
+      });
+      gsap.to(".al-orb-2", {
+        x: -20,
+        y: 30,
+        duration: 8,
+        repeat: -1,
+        yoyo: true,
+        ease: "sine.inOut",
       });
     }, containerRef);
-
     return () => ctx.revert();
   }, []);
 
+  // If still loading auth, show dark loading screen
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#050505",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#6366f1",
+          fontFamily: "'Space Grotesk', sans-serif",
+          fontSize: 18,
+        }}
+      >
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+          <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 14 }}>
+            Checking session…
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Already logged in as admin → skip login
+  if (user && user.isAdmin === 1) {
+    return <Navigate to="/admin" replace />;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     setErrorText("");
     try {
-      await login({ email, password });
+      await login({ email: identifier, password });
       await refresh();
-
-      // We must check if the user is actually an admin after fetching profile
-      // The `refresh()` call above updates `window.__AUTH_USER` (conceptually) but `useAuth` user object is updated async.
-      // We can do a quick check via an API or just rely on the protected route mechanics.
-      // A better way is to wait briefly for context to sync or manually verify.
-      // Let's just navigate. The <AdminRoute> will kick them out if they aren't admin.
-      // But for a better UX, we could fetch /api/profile directly and verify.
-
-      const res = await fetch("/api/profile");
-      if (res.ok) {
-        const body = await res.json();
-        if (body.data?.isAdmin === 1) {
-          navigate("/admin");
-        } else {
-          setErrorText(
-            "Access Denied: You do not have administrator privileges.",
-          );
-          // Ideally logout here or redirect them to dashboard
-          setTimeout(() => navigate("/dashboard"), 2000);
-        }
-      } else {
-        navigate("/admin");
-      }
+      // After auth refresh, navigate; AdminRoute will handle guard
+      navigate("/admin");
     } catch (err: any) {
-      setErrorText(err?.message || "Invalid credentials.");
+      setErrorText(err?.message || "Invalid credentials. Please try again.");
+      // Shake effect
+      gsap.to(".al-card", {
+        x: -8,
+        duration: 0.05,
+        repeat: 5,
+        yoyo: true,
+        ease: "none",
+        onComplete: () => gsap.set(".al-card", { x: 0 }),
+      });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
-  };
-
-  const fieldStyle: React.CSSProperties = {
-    background: "rgba(255, 255, 255, 0.03)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
-    borderRadius: "12px",
-    color: "white",
-    padding: "14px 18px",
-    width: "100%",
-    outline: "none",
-    fontSize: "15px",
-    transition: "all 0.3s ease",
-    boxShadow: "inset 0 2px 4px rgba(0,0,0,0.2)",
   };
 
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center justify-center min-h-screen overflow-hidden"
       style={{
-        background: "#050505",
+        minHeight: "100vh",
+        background: "#050508",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
         fontFamily: "'Space Grotesk', sans-serif",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      {/* Background glowing orbs */}
-      <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-indigo-600/20 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] rounded-full bg-cyan-600/10 blur-[100px] pointer-events-none" />
-
-      {/* Tiny particles */}
-      {Array.from({ length: 15 }).map((_, i) => (
-        <div
-          key={i}
-          className="particle absolute rounded-full bg-white point-events-none"
-          style={{
-            width: Math.random() * 4 + 1 + "px",
-            height: Math.random() * 4 + 1 + "px",
-            left: Math.random() * 100 + "%",
-            top: Math.random() * 100 + "%",
-            opacity: 0,
-          }}
-        />
-      ))}
-
+      {/* Background orbs */}
       <div
-        className="relative z-10 w-full max-w-md p-10 rounded-3xl"
+        className="al-orb-1"
         style={{
-          background: "rgba(20, 20, 25, 0.6)",
-          backdropFilter: "blur(24px)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+          position: "absolute",
+          top: "15%",
+          left: "10%",
+          width: 420,
+          height: 420,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        className="al-orb-2"
+        style={{
+          position: "absolute",
+          bottom: "10%",
+          right: "8%",
+          width: 320,
+          height: 320,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Subtle grid overlay */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)",
+          backgroundSize: "60px 60px",
+        }}
+      />
+
+      {/* Login card */}
+      <div
+        className="al-card"
+        style={{
+          position: "relative",
+          zIndex: 10,
+          width: "100%",
+          maxWidth: 420,
+          background: "rgba(15, 17, 25, 0.85)",
+          backdropFilter: "blur(32px)",
+          border: "1px solid rgba(99,102,241,0.18)",
+          borderRadius: 24,
+          padding: "44px 40px",
+          boxShadow:
+            "0 0 0 1px rgba(255,255,255,0.04), 0 32px 64px rgba(0,0,0,0.5)",
         }}
       >
-        <div className="text-center mb-8">
+        {/* Logo */}
+        <div
+          className="al-logo"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginBottom: 32,
+          }}
+        >
           <div
-            className="admin-badge inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4"
             style={{
-              background:
-                "linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2))",
-              border: "1px solid rgba(99,102,241,0.3)",
-              color: "#a5b4fc",
-              fontSize: "24px",
+              width: 60,
+              height: 60,
+              borderRadius: 16,
+              background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 26,
+              marginBottom: 16,
+              boxShadow: "0 8px 24px rgba(79,70,229,0.4)",
             }}
           >
             ⚡
           </div>
-          <h1 className="admin-title text-3xl font-bold text-white tracking-tight">
-            System Admin
+          <h1
+            className="al-title"
+            style={{
+              fontSize: 26,
+              fontWeight: 700,
+              color: "white",
+              margin: 0,
+              letterSpacing: "-0.5px",
+            }}
+          >
+            Admin Portal
           </h1>
-          <p className="admin-subtitle text-sm mt-2 text-indigo-200/60">
-            Restricted access portal. Please authenticate.
+          <p
+            className="al-sub"
+            style={{
+              fontSize: 13,
+              color: "rgba(255,255,255,0.35)",
+              marginTop: 6,
+              textAlign: "center",
+            }}
+          >
+            Restricted area · Authorized personnel only
           </p>
         </div>
 
-        <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-xs font-semibold tracking-wider text-indigo-300/50 uppercase mb-2">
-              Email Address / Username
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        >
+          {/* Email / identifier */}
+          <div
+            className="al-field"
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            <label
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "rgba(165,180,252,0.6)",
+              }}
+            >
+              Email
             </label>
             <input
               type="text"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="focus:border-indigo-500 focus:bg-white/5 transition-all"
-              style={fieldStyle}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               placeholder="admin@sypev.com"
               required
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(99,102,241,0.2)",
+                borderRadius: 12,
+                color: "white",
+                padding: "13px 16px",
+                fontSize: 14,
+                outline: "none",
+                transition: "border-color 0.2s",
+                width: "100%",
+                boxSizing: "border-box",
+              }}
+              onFocus={(e) =>
+                (e.target.style.borderColor = "rgba(99,102,241,0.6)")
+              }
+              onBlur={(e) =>
+                (e.target.style.borderColor = "rgba(99,102,241,0.2)")
+              }
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold tracking-wider text-indigo-300/50 uppercase mb-2">
+          {/* Password */}
+          <div
+            className="al-field"
+            style={{ display: "flex", flexDirection: "column", gap: 6 }}
+          >
+            <label
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "rgba(165,180,252,0.6)",
+              }}
+            >
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="focus:border-indigo-500 focus:bg-white/5 transition-all"
-              style={fieldStyle}
-              placeholder="••••••••"
-              required
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPass ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(99,102,241,0.2)",
+                  borderRadius: 12,
+                  color: "white",
+                  padding: "13px 44px 13px 16px",
+                  fontSize: 14,
+                  outline: "none",
+                  transition: "border-color 0.2s",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+                onFocus={(e) =>
+                  (e.target.style.borderColor = "rgba(99,102,241,0.6)")
+                }
+                onBlur={(e) =>
+                  (e.target.style.borderColor = "rgba(99,102,241,0.2)")
+                }
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                style={{
+                  position: "absolute",
+                  right: 13,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(255,255,255,0.3)",
+                  fontSize: 16,
+                  padding: 0,
+                }}
+              >
+                {showPass ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
 
+          {/* Error */}
           {errorText && (
-            <div className="text-red-400 text-sm py-2 px-3 rounded-xl bg-red-500/10 border border-red-500/20">
-              {errorText}
+            <div
+              style={{
+                background: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                borderRadius: 10,
+                padding: "10px 14px",
+                fontSize: 13,
+                color: "#f87171",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span>⚠️</span> {errorText}
             </div>
           )}
 
+          {/* Submit */}
           <button
+            className="al-btn"
             type="submit"
-            disabled={loading}
-            className="w-full relative overflow-hidden group rounded-xl py-3.5 mt-2 font-bold text-[15px] tracking-wide transition-all"
+            disabled={submitting}
             style={{
-              background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+              marginTop: 8,
+              width: "100%",
+              padding: "14px",
+              borderRadius: 14,
+              background: submitting
+                ? "rgba(79,70,229,0.4)"
+                : "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
               color: "white",
-              opacity: loading ? 0.7 : 1,
-              transform: loading ? "scale(0.98)" : "scale(1)",
+              fontWeight: 700,
+              fontSize: 15,
+              letterSpacing: "0.02em",
+              border: "none",
+              cursor: submitting ? "not-allowed" : "pointer",
+              transition: "all 0.2s",
+              boxShadow: submitting
+                ? "none"
+                : "0 8px 20px rgba(79,70,229,0.35)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+            onMouseEnter={(e) => {
+              if (!submitting)
+                (e.target as HTMLButtonElement).style.transform =
+                  "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.target as HTMLButtonElement).style.transform = "";
             }}
           >
-            <span className="relative z-10">
-              {loading ? "Authenticating..." : "Authorize Access"}
-            </span>
-            <div className="absolute inset-0 h-full w-full opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+            {submitting ? (
+              <>
+                <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                Authenticating…
+              </>
+            ) : (
+              "Authorize Access →"
+            )}
           </button>
-
-          <div className="text-center mt-6">
-            <Link
-              to="/login"
-              className="text-xs text-indigo-300/40 hover:text-indigo-300/80 transition-colors"
-            >
-              ← Return to User Portal
-            </Link>
-          </div>
         </form>
-      </div>
 
-      <style>{`
-        @keyframes shimmer {
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
+        {/* Footer link */}
+        <div style={{ textAlign: "center", marginTop: 28 }}>
+          <Link
+            to="/login"
+            style={{
+              fontSize: 12,
+              color: "rgba(255,255,255,0.2)",
+              textDecoration: "none",
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) =>
+              ((e.target as HTMLAnchorElement).style.color =
+                "rgba(165,180,252,0.6)")
+            }
+            onMouseLeave={(e) =>
+              ((e.target as HTMLAnchorElement).style.color =
+                "rgba(255,255,255,0.2)")
+            }
+          >
+            ← Return to User Portal
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

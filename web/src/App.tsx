@@ -29,8 +29,24 @@ function ProtectedRoute({ children }: { children: React.ReactElement }) {
 function AdminRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
   if (loading)
-    return <div className="p-10 text-muted-foreground">Loading...</div>;
-  if (!user || user.isAdmin !== 1) return <Navigate to="/dashboard" replace />;
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#050505",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#6366f1",
+          fontFamily: "'Space Grotesk', sans-serif",
+          fontSize: 18,
+        }}
+      >
+        Authenticating…
+      </div>
+    );
+  if (!user) return <Navigate to="/admin/login" replace />;
+  if (user.isAdmin !== 1) return <Navigate to="/admin/login" replace />;
   return children;
 }
 
@@ -148,79 +164,95 @@ export default function App() {
   useGoogleAnalytics();
   return (
     <AuthProvider>
-      <Layout>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/study/sat"
-            element={
-              <ProtectedRoute>
-                <StudySat />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admissions"
-            element={
-              <ProtectedRoute>
-                <Admissions />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/universities"
-            element={
-              <ProtectedRoute>
-                <Universities />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/universities/:id"
-            element={
-              <ProtectedRoute>
-                <UniversityDetail />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/tutor"
-            element={
-              <ProtectedRoute>
-                <Tutor />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminPanel />
-              </AdminRoute>
-            }
-          />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* ── Admin routes — standalone, no Layout wrapper ── */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPanel />
+            </AdminRoute>
+          }
+        />
+
+        {/* ── Regular routes — wrapped in Layout ── */}
+        <Route
+          path="/*"
+          element={
+            <Layout>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/study/sat"
+                  element={
+                    <ProtectedRoute>
+                      <StudySat />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admissions"
+                  element={
+                    <ProtectedRoute>
+                      <Admissions />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/universities"
+                  element={
+                    <ProtectedRoute>
+                      <Universities />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/universities/:id"
+                  element={
+                    <ProtectedRoute>
+                      <UniversityDetail />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/tutor"
+                  element={
+                    <ProtectedRoute>
+                      <Tutor />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/"
+                  element={<Navigate to="/dashboard" replace />}
+                />
+                <Route
+                  path="*"
+                  element={<Navigate to="/dashboard" replace />}
+                />
+              </Routes>
+            </Layout>
+          }
+        />
+      </Routes>
     </AuthProvider>
   );
 }
