@@ -124,7 +124,9 @@ export default function AdminLogin() {
         repeat: 5,
         yoyo: true,
         ease: "none",
-        onComplete: () => gsap.set(".al-card", { x: 0 }),
+        onComplete: () => {
+          gsap.set(".al-card", { x: 0 });
+        },
       });
     } finally {
       setSubmitting(false);
