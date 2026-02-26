@@ -4,6 +4,7 @@ CREATE TABLE `users` (
   `telegram_id` text,
   `name` text NOT NULL,
   `password_hash` text NOT NULL,
+  `is_admin` integer NOT NULL DEFAULT 0,
   `created_at` integer NOT NULL
 );
 CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);
