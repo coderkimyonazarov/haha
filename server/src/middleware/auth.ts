@@ -64,7 +64,8 @@ export async function authRequired(
     if (err) {
       return next(err);
     }
-    if (!req.user) {
+    const user = getUserFromRequest(req);
+    if (!user) {
       return next(new AppError("UNAUTHORIZED", "Authentication required", 401));
     }
     return next();
@@ -76,7 +77,8 @@ export async function requireAdmin(
   _res: Response,
   next: NextFunction,
 ) {
-  if (!req.user || req.user.isAdmin !== 1) {
+  const user = getUserFromRequest(req);
+  if (!user || user.isAdmin !== 1) {
     return next(new AppError("FORBIDDEN", "Admin access required", 403));
   }
   return next();
