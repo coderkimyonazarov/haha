@@ -12,10 +12,7 @@ const GA_ID = import.meta.env.VITE_PUBLIC_GA_ID;
 
 export const initGA = () => {
   if (!GA_ID) {
-    // Only warn in production; in dev it's expected to be unset
-    if (import.meta.env.PROD) {
-      console.warn("GA_ID is not defined in environment variables");
-    }
+    // GA_ID not configured — analytics disabled silently
     return;
   }
 

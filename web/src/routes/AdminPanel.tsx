@@ -654,7 +654,7 @@ export default function AdminPanel() {
                           >
                             {u.isAdmin ? "Revoke Admin" : "Make Admin"}
                           </button>
-                          {user.id !== u.id && (
+                          {u.isAdmin ? null : (
                             <button
                               onClick={() => deleteUser(u.id)}
                               className="rounded-lg px-3 py-1.5 text-xs font-medium transition-all hover:opacity-80"
