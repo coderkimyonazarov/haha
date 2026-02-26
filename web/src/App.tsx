@@ -13,6 +13,7 @@ import StudySat from "./routes/StudySat";
 import Tutor from "./routes/Tutor";
 import Universities from "./routes/Universities";
 import UniversityDetail from "./routes/UniversityDetail";
+import AdminLogin from "./routes/AdminLogin";
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -207,6 +208,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin"
             element={
