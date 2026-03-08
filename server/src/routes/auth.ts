@@ -610,8 +610,6 @@ router.get("/me", async (req, res, next) => {
   }
 });
 
-});
-
 // ── Admin-specific auth routes ─────────────────────────────────────────────────
 router.post("/admin-login", async (req, res, next) => {
   try {
