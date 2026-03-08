@@ -1,22 +1,26 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
-import { User, Session } from "@supabase/supabase-js";
+import { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import * as api from "../api";
+import { User as AppUser, UserPreferences } from "../api";
 import { applyTheme } from "./theme";
 
 interface AuthState {
-  user: User | null;
+  user: AppUser | null;
   session: Session | null;
   profile: any | null;
   loading: boolean;
   needsUsername: boolean;
-  preferences: any | null;
+  preferences: UserPreferences | null;
   providers: { provider: string; linkedAt: number }[];
 }
 
 interface AuthContextValue extends AuthState {
   refreshProfile: () => Promise<void>;
+  refresh: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
+  logout: () => Promise<void>;
   setSessionManually: (accessToken: string, refreshToken: string) => Promise<void>;
 }
 
@@ -33,49 +37,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     providers: [],
   });
 
-  const fetchProfileData = async (sessionUser: User | null) => {
+  const fetchProfileData = async (sessionUser: SupabaseUser | null) => {
     if (!sessionUser) {
       setState((s) => ({ ...s, user: null, session: null, profile: null, loading: false }));
       return;
     }
     
     try {
-      const { data } = await api.get("/auth/me");
-      if (data?.data) {
-        if (data.data.preferences) {
-          applyTheme(
-            data.data.preferences.theme,
-            data.data.preferences.accent,
-            data.data.preferences.vibe
-          );
+      const data = await api.me();
+      if (data && data.user) {
+        if (data.preferences) {
+          applyTheme({
+            ...data.preferences,
+            onboardingDone: Boolean(data.preferences.onboardingDone) // Convert number 0/1 to boolean
+          });
         }
         setState((s) => ({
           ...s,
-          user: sessionUser,
-          profile: data.data.profile,
-          needsUsername: data.data.user?.needsUsername || false,
-          preferences: data.data.preferences,
-          providers: data.data.providers || [],
+          user: data.user,
+          profile: data.profile,
+          needsUsername: data.user.needsUsername || false,
+          preferences: data.preferences || null,
+          providers: data.providers || [],
           loading: false,
         }));
       } else {
-        setState((s) => ({ ...s, user: sessionUser, loading: false }));
+        setState((s) => ({ ...s, user: null, loading: false }));
       }
     } catch (error) {
-      setState((s) => ({ ...s, user: sessionUser, loading: false }));
+      setState((s) => ({ ...s, user: null, loading: false }));
     }
   };
 
   useEffect(() => {
     // Initial fetch
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setState((s) => ({ ...s, session }));
       fetchProfileData(session?.user || null);
     });
 
     // Listen to changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (_event: any, session: Session | null) => {
         setState((s) => ({ ...s, session, loading: true }));
         fetchProfileData(session?.user || null);
       }
@@ -87,10 +90,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProfile = async () => {
-    await fetchProfileData(state.user);
+    await fetchProfileData(state.session?.user || null);
   };
 
   const signOut = async () => {
+    await api.logout().catch(() => {}); // Clear backend sypev cookies if any left
     await supabase.auth.signOut();
     setState({
       user: null,
@@ -114,7 +118,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, refreshProfile, signOut, setSessionManually }}>
+    <AuthContext.Provider 
+      value={{ 
+        ...state, 
+        refreshProfile, 
+        refresh: refreshProfile, 
+        refreshUser: refreshProfile, 
+        signOut, 
+        logout: signOut, 
+        setSessionManually 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
