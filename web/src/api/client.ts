@@ -26,11 +26,13 @@ export function clearCustomAccessToken() {
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
-  config: { silent?: boolean } = {}
+  config: { silent?: boolean } = {},
 ): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   const customToken = getCustomAccessToken();
-  
+
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
   if (session?.access_token) {
@@ -45,7 +47,7 @@ export async function apiFetch<T>(
   const res = await fetch(fullUrl, {
     ...options,
     headers,
-    credentials: isAdminRoute ? "include" : "omit" // Admin relies on cross-domain cookies
+    credentials: isAdminRoute ? "include" : "omit", // Admin relies on cross-domain cookies
   });
 
   let data: any = null;
@@ -56,8 +58,8 @@ export async function apiFetch<T>(
       ok: false,
       error: {
         code: "NON_JSON_RESPONSE",
-        message: res.ok ? "Unexpected non-JSON response" : "Request failed"
-      }
+        message: res.ok ? "Unexpected non-JSON response" : "Request failed",
+      },
     };
     if (!config.silent) {
       toast.error(fallback.error.message);

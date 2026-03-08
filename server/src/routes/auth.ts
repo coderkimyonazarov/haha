@@ -11,6 +11,7 @@ import { AppError } from "../utils/error";
 import { authLimiter, authReadLimiter } from "../middleware/rateLimit";
 import { parseWithSchema } from "../utils/validation";
 import {
+  registerSchema,
   loginSchema,
   telegramAuthSchema,
   usernameSchema,
@@ -258,6 +259,141 @@ router.get("/check-username", authReadLimiter, async (req, res) => {
         valid: false,
         normalizedUsername: null,
         error: "Username service temporarily unavailable",
+      },
+    });
+  }
+});
+
+router.post("/register", authLimiter, async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+
+  try {
+    const input = parseWithSchema(registerSchema, req.body);
+    const email = input.email.trim().toLowerCase();
+    const password = input.password;
+
+    logAuthDebug("register", requestId, "incoming request", {
+      emailDomain: email.split("@")[1] ?? "",
+      hasName: Boolean(input.name),
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
+
+    const { data: existingUsersRes, error: listUsersError } = await getSupabaseAdmin()
+      .auth.admin.listUsers({ search: email });
+
+    if (listUsersError) {
+      logAuthDebug("register", requestId, "list users failed", {
+        supabaseError: listUsersError.message,
+      }, "error");
+      return res.status(503).json({
+        ok: false,
+        error: {
+          code: "AUTH_SERVICE_UNAVAILABLE",
+          message: "Registration service temporarily unavailable",
+        },
+      });
+    }
+
+    const hasExistingUser = Boolean(
+      existingUsersRes?.users?.some((user) => user.email?.toLowerCase() === email),
+    );
+    if (hasExistingUser) {
+      return res.status(409).json({
+        ok: false,
+        error: {
+          code: "EMAIL_ALREADY_REGISTERED",
+          message: "An account with this email already exists",
+        },
+      });
+    }
+
+    const { data: created, error: createError } = await getSupabaseAdmin().auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name: input.name?.trim() || null,
+        signup_provider: "email",
+      },
+    });
+
+    if (createError || !created.user) {
+      const message = createError?.message?.toLowerCase() ?? "";
+      if (message.includes("already been registered")) {
+        return res.status(409).json({
+          ok: false,
+          error: {
+            code: "EMAIL_ALREADY_REGISTERED",
+            message: "An account with this email already exists",
+          },
+        });
+      }
+
+      logAuthDebug("register", requestId, "create user failed", {
+        supabaseError: createError?.message ?? null,
+      }, "error");
+      return res.status(503).json({
+        ok: false,
+        error: {
+          code: "AUTH_SERVICE_UNAVAILABLE",
+          message: "Registration service temporarily unavailable",
+        },
+      });
+    }
+
+    await getDb()
+      .insert(studentProfiles)
+      .values({ userId: created.user.id })
+      .onConflictDoNothing({ target: studentProfiles.userId });
+
+    const { data: authData, error: authError } = await getSupabaseAnon().auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError || !authData.session || !authData.user) {
+      logAuthDebug("register", requestId, "sign in after register failed", {
+        supabaseError: authError?.message ?? null,
+      }, "error");
+      return res.status(503).json({
+        ok: false,
+        error: {
+          code: "AUTH_SERVICE_UNAVAILABLE",
+          message: "Registration completed but automatic login failed",
+        },
+      });
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        session: authData.session,
+        user: authData.user,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError && error.status === 400) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: "INVALID_INPUT",
+          message: "Invalid registration payload",
+        },
+      });
+    }
+
+    logAuthDebug("register", requestId, "route failed", {
+      error: formatErrorForLog(error),
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    }, "error");
+
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "AUTH_SERVICE_UNAVAILABLE",
+        message: "Registration service temporarily unavailable",
       },
     });
   }

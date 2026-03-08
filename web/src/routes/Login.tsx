@@ -6,12 +6,38 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../lib/auth";
-import { getGoogleOAuthErrorMessage, getLoginErrorMessage } from "../lib/authErrors";
+import {
+  getGoogleOAuthErrorMessage,
+  getGoogleOAuthErrorMessageFromUrl,
+  getLoginErrorMessage,
+  isAuthRateLimitError,
+} from "../lib/authErrors";
 import { toast } from "sonner";
 import { ArrowRight, Mail, Smartphone, Command } from "lucide-react";
 import gsap from "gsap";
 
 type AuthTab = "email" | "phone";
+
+const LOGIN_COOLDOWN_KEY = "test_bro_login_cooldown_until";
+const LOGIN_COOLDOWN_MS = 30_000;
+
+function getRemainingMs(until: number): number {
+  return Math.max(0, until - Date.now());
+}
+
+function getStoredCooldownUntil(key: string): number {
+  const raw = localStorage.getItem(key);
+  const value = raw ? Number(raw) : 0;
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return value;
+}
+
+function setCooldown(key: string, durationMs: number) {
+  const until = Date.now() + durationMs;
+  localStorage.setItem(key, String(until));
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -19,13 +45,36 @@ export default function Login() {
   const [tab, setTab] = React.useState<AuthTab>("email");
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
+  const [emailLoading, setEmailLoading] = React.useState(false);
+  const [oauthLoading, setOauthLoading] = React.useState(false);
+  const [telegramLoading, setTelegramLoading] = React.useState(false);
+  const [cooldownUntil, setCooldownUntil] = React.useState(() => getStoredCooldownUntil(LOGIN_COOLDOWN_KEY));
+
   const emailSubmitLockRef = React.useRef(false);
   const oauthSubmitLockRef = React.useRef(false);
   const telegramLockRef = React.useRef(false);
+  const oauthErrorHandledRef = React.useRef(false);
+
+  const cooldownRemainingMs = getRemainingMs(cooldownUntil);
+  const cooldownActive = cooldownRemainingMs > 0;
+  const cooldownSeconds = Math.ceil(cooldownRemainingMs / 1000);
+
+  const isAnyLoading = emailLoading || oauthLoading || telegramLoading;
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const formRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!cooldownActive) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCooldownUntil(getStoredCooldownUntil(LOGIN_COOLDOWN_KEY));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [cooldownActive]);
 
   React.useEffect(() => {
     if (containerRef.current && formRef.current) {
@@ -37,11 +86,37 @@ export default function Login() {
     }
   }, [tab]);
 
+  React.useEffect(() => {
+    if (oauthErrorHandledRef.current) {
+      return;
+    }
+
+    const oauthErrorMessage = getGoogleOAuthErrorMessageFromUrl(window.location);
+    if (!oauthErrorMessage) {
+      return;
+    }
+
+    oauthErrorHandledRef.current = true;
+    toast.error(oauthErrorMessage);
+
+    if (window.location.search || window.location.hash) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || emailSubmitLockRef.current) return;
+
+    if (cooldownActive) {
+      toast.error(`Too many login attempts. Please wait ${cooldownSeconds}s and try again.`);
+      return;
+    }
+
+    if (isAnyLoading || emailSubmitLockRef.current) return;
+
     emailSubmitLockRef.current = true;
-    setLoading(true);
+    setEmailLoading(true);
+
     try {
       const normalizedIdentifier = identifier.trim();
       if (!normalizedIdentifier || !password) {
@@ -49,23 +124,10 @@ export default function Login() {
         return;
       }
 
-      const attemptLogin = () =>
-        login({
-          identifier: normalizedIdentifier,
-          password,
-        });
-
-      let response;
-      try {
-        response = await attemptLogin();
-      } catch (firstErr: any) {
-        if (firstErr?.code === "AUTH_SERVICE_UNAVAILABLE") {
-          await new Promise((resolve) => setTimeout(resolve, 800));
-          response = await attemptLogin();
-        } else {
-          throw firstErr;
-        }
-      }
+      const response = await login({
+        identifier: normalizedIdentifier,
+        password,
+      });
 
       const { error } = await supabase.auth.setSession({
         access_token: response.session.access_token,
@@ -79,21 +141,29 @@ export default function Login() {
       await refreshProfile();
       navigate("/dashboard");
     } catch (err: any) {
-      // Surface detailed error information for debugging while keeping user-facing toast simple.
       // eslint-disable-next-line no-console
       console.error("email/username login failed", err);
+
+      if (isAuthRateLimitError(err)) {
+        setCooldown(LOGIN_COOLDOWN_KEY, LOGIN_COOLDOWN_MS);
+        const until = getStoredCooldownUntil(LOGIN_COOLDOWN_KEY);
+        setCooldownUntil(until);
+      }
+
       toast.error(getLoginErrorMessage(err));
     } finally {
       emailSubmitLockRef.current = false;
-      setLoading(false);
+      setEmailLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    if (loading || oauthSubmitLockRef.current) return;
+    if (isAnyLoading || oauthSubmitLockRef.current) return;
+
     oauthSubmitLockRef.current = true;
-    setLoading(true);
+    setOauthLoading(true);
     let shouldReleaseLock = true;
+
     try {
       const redirectUrl = `${window.location.origin}/dashboard`;
 
@@ -107,6 +177,7 @@ export default function Login() {
       if (error) {
         throw error;
       }
+
       shouldReleaseLock = false;
     } catch (err: any) {
       // eslint-disable-next-line no-console
@@ -115,7 +186,7 @@ export default function Login() {
     } finally {
       if (shouldReleaseLock) {
         oauthSubmitLockRef.current = false;
-        setLoading(false);
+        setOauthLoading(false);
       }
     }
   };
@@ -124,8 +195,11 @@ export default function Login() {
     (window as Window & { onTelegramAuth?: (user: Record<string, unknown>) => Promise<void> }).onTelegramAuth = async (
       user: Record<string, unknown>,
     ) => {
-      if (telegramLockRef.current) return;
+      if (isAnyLoading || telegramLockRef.current) return;
+
       telegramLockRef.current = true;
+      setTelegramLoading(true);
+
       try {
         const res = await telegramAuth(user);
         if ("accessToken" in res) {
@@ -134,17 +208,26 @@ export default function Login() {
           return;
         }
 
+        if ("linked" in res) {
+          await refreshProfile();
+          navigate("/dashboard");
+          return;
+        }
+
         toast.error("Telegram login response is invalid");
       } catch (err: any) {
-        toast.error(err?.message || "Telegram login failed");
+        toast.error(getLoginErrorMessage(err));
       } finally {
         telegramLockRef.current = false;
+        setTelegramLoading(false);
       }
     };
-  }, [setTelegramSession, navigate]);
+  }, [isAnyLoading, navigate, refreshProfile, setTelegramSession]);
 
   React.useEffect(() => {
-    const botUsername = (window as Window & { __TELEGRAM_BOT_USERNAME?: string }).__TELEGRAM_BOT_USERNAME || "SypevBot";
+    const botUsername =
+      (window as Window & { __TELEGRAM_BOT_USERNAME?: string }).__TELEGRAM_BOT_USERNAME ||
+      "SypevBot";
     if (!botUsername) return;
 
     const script = document.createElement("script");
@@ -157,6 +240,7 @@ export default function Login() {
     script.async = true;
 
     const container = document.getElementById("telegram-login-container");
+    container?.replaceChildren();
     container?.appendChild(script);
 
     return () => {
@@ -201,6 +285,7 @@ export default function Login() {
                   type="button"
                   className={`flex items-center justify-center gap-2 flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${tab === "email" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                   onClick={() => setTab("email")}
+                  disabled={isAnyLoading}
                 >
                   <Mail className="w-4 h-4" />
                   Email/Username
@@ -210,8 +295,11 @@ export default function Login() {
                   className={`flex items-center justify-center gap-2 flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all opacity-60 cursor-not-allowed ${tab === "phone" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
                   onClick={(e) => {
                     e.preventDefault();
-                    toast.info("Phone auth via Supabase coming soon!");
+                    if (!isAnyLoading) {
+                      toast.info("Phone auth via Supabase coming soon!");
+                    }
                   }}
+                  disabled={isAnyLoading}
                 >
                   <Smartphone className="w-4 h-4" />
                   Phone
@@ -228,7 +316,7 @@ export default function Login() {
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
                       placeholder="name@example.com or username"
-                      disabled={loading}
+                      disabled={isAnyLoading || cooldownActive}
                       required
                     />
                   </div>
@@ -244,13 +332,23 @@ export default function Login() {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      disabled={loading}
+                      disabled={isAnyLoading || cooldownActive}
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full h-12 text-base font-semibold group mt-2" disabled={loading}>
-                    {loading ? "Authenticating..." : "Log in"}
-                    {!loading && <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />}
+                  <Button
+                    type="submit"
+                    className="w-full h-12 text-base font-semibold group mt-2"
+                    disabled={isAnyLoading || cooldownActive}
+                  >
+                    {cooldownActive
+                      ? `Please wait ${cooldownSeconds}s`
+                      : emailLoading
+                        ? "Authenticating..."
+                        : "Log in"}
+                    {!cooldownActive && !emailLoading && (
+                      <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                    )}
                   </Button>
                 </form>
               )}
@@ -270,16 +368,17 @@ export default function Login() {
                   variant="outline"
                   className="w-full h-12 flex items-center justify-center gap-2"
                   onClick={handleGoogleLogin}
-                  disabled={loading}
+                  disabled={isAnyLoading || cooldownActive}
                 >
                   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.25033 6.60998L5.31033 9.76C6.27533 6.81 9.07033 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5649 4.88501 12.7949 4.88501 11.9949C4.88501 11.1949 5.01998 10.4249 5.26498 9.6949L1.275 6.65486C0.46 8.22986 0 10.0549 0 11.9949C0 13.9349 0.46 15.7599 1.28 17.3349L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24C15.2404 24 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C9.07041 19.245 6.27541 17.185 5.31041 14.235L1.25043 17.385C3.25543 21.305 7.31041 24 12.0004 24Z" fill="#34A853"/></svg>
-                  Continue with Google
+                  {oauthLoading ? "Redirecting to Google..." : "Continue with Google"}
                 </Button>
 
                 <div
                   id="telegram-login-container"
-                  className="flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow w-full"
+                  className={`flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow w-full ${isAnyLoading || cooldownActive ? "pointer-events-none opacity-60" : ""}`}
                 />
+                {telegramLoading && <p className="text-xs text-muted-foreground">Authenticating with Telegram...</p>}
               </div>
 
               <div className="text-center mt-8 animate-element">
