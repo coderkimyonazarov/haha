@@ -4,7 +4,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 
-import { ensureSchema, getDb } from "./db";
+import { ensureSchema } from "./db";
 import { requestId } from "./middleware/requestId";
 import { authOptional, requireAdmin } from "./middleware/auth";
 import { errorHandler } from "./middleware/errorHandler";
@@ -22,6 +22,7 @@ import adminRouter from "./routes/admin";
 ensureSchema();
 
 const app = express();
+app.set("trust proxy", 1);
 
 // ── Security Headers ──────────────────────────────────────────────────────────
 app.use(

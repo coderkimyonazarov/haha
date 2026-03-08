@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 // ── Global rate limiter ───────────────────────────────────────────────────────
 export const globalLimiter = rateLimit({
@@ -52,7 +52,17 @@ export const otpLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
-    return req.body?.phone || req.body?.email || req.ip || "unknown";
+    const phone = typeof req.body?.phone === "string" ? req.body.phone.trim() : "";
+    if (phone) {
+      return `phone:${phone}`;
+    }
+
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (email) {
+      return `email:${email}`;
+    }
+
+    return ipKeyGenerator(req.ip ?? "0.0.0.0");
   },
   message: {
     ok: false,

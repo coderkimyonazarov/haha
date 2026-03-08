@@ -46,9 +46,14 @@ function logAuthDebug(
   requestId: string,
   message: string,
   details?: Record<string, unknown>,
+  level: "info" | "error" = "info",
 ) {
   const payload = details ? ` ${JSON.stringify(details)}` : "";
-  console.error(`[auth:${scope}][${requestId}] ${message}${payload}`);
+  if (level === "error") {
+    console.error(`[auth:${scope}][${requestId}] ${message}${payload}`);
+    return;
+  }
+  console.log(`[auth:${scope}][${requestId}] ${message}${payload}`);
 }
 
 function getTelegramJwtSecret(): string {
@@ -155,7 +160,7 @@ router.get("/health-auth", authReadLimiter, async (req, res) => {
   } catch (error) {
     logAuthDebug("health-auth", requestId, "health route failed", {
       error: error instanceof Error ? error.message : "unknown_error",
-    });
+    }, "error");
 
     return res.status(200).json({
       ok: true,
@@ -218,7 +223,7 @@ router.get("/check-username", authReadLimiter, async (req, res) => {
       logAuthDebug("check-username", requestId, "db lookup failure", {
         error: formatErrorForLog(dbError),
         dbConfig: getDbConfigStatus(),
-      });
+      }, "error");
       return res.status(200).json({
         ok: true,
         data: {
@@ -244,7 +249,7 @@ router.get("/check-username", authReadLimiter, async (req, res) => {
       error: formatErrorForLog(error),
       dbConfig: getDbConfigStatus(),
       supabaseConfig: getSupabaseConfigStatus(),
-    });
+    }, "error");
 
     return res.status(200).json({
       ok: true,
@@ -452,7 +457,7 @@ router.post("/login", authLimiter, async (req, res) => {
         hasSession: Boolean(authData?.session),
         hasUser: Boolean(authData?.user),
         supabaseError: authError?.message ?? null,
-      });
+      }, "error");
       return res.status(401).json({
         ok: false,
         error: {
@@ -474,7 +479,7 @@ router.post("/login", authLimiter, async (req, res) => {
       error: formatErrorForLog(error),
       dbConfig: getDbConfigStatus(),
       supabaseConfig: getSupabaseConfigStatus(),
-    });
+    }, "error");
 
     return res.status(503).json({
       ok: false,
@@ -530,7 +535,7 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
           userId: sessionUser.id,
           telegramUserId,
           existingLinkId: existingProviderLink[0].id,
-        });
+        }, "error");
         throw new AppError("PROVIDER_CONFLICT", "Telegram account is already linked", 409);
       }
 
@@ -592,7 +597,7 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
       if (createError || !created.user) {
         logAuthDebug("telegram", requestId, "supabase user creation failed", {
           supabaseError: createError?.message ?? null,
-        });
+        }, "error");
         throw new AppError("CREATE_FAILED", "Failed to create Telegram account", 500);
       }
 
@@ -629,7 +634,7 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
       error: formatErrorForLog(error),
       dbConfig: getDbConfigStatus(),
       supabaseConfig: getSupabaseConfigStatus(),
-    });
+    }, "error");
     next(error);
   }
 });
@@ -724,7 +729,7 @@ router.post("/set-password", authLimiter, async (req, res) => {
     if (error || !data.user) {
       logAuthDebug("set-password", requestId, "password update failed", {
         supabaseError: error?.message ?? null,
-      });
+      }, "error");
       return res.status(503).json({
         ok: false,
         error: { code: "AUTH_SERVICE_UNAVAILABLE", message: "Password update failed" },
@@ -735,7 +740,7 @@ router.post("/set-password", authLimiter, async (req, res) => {
   } catch (error) {
     logAuthDebug("set-password", requestId, "route failed", {
       error: formatErrorForLog(error),
-    });
+    }, "error");
     return res.status(503).json({
       ok: false,
       error: { code: "AUTH_SERVICE_UNAVAILABLE", message: "Password update failed" },
