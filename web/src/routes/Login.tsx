@@ -38,7 +38,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await login({ email, password });
+      const res = await login({ identifier: email, password });
       await refresh();
       if (res.needsUsername) {
         navigate("/set-username");
@@ -184,11 +184,12 @@ export default function Login() {
           {tab === "email" && (
             <form className="space-y-4" onSubmit={handleEmailLogin}>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>Email or Username</Label>
                 <Input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your_email@example.com or user_name"
                   required
                 />
               </div>

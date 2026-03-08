@@ -75,7 +75,7 @@ export async function register(payload: {
   });
 }
 
-export async function login(payload: { email: string; password: string }) {
+export async function login(payload: { identifier: string; password: string }) {
   return apiFetch<User>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),

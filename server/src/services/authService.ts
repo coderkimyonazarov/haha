@@ -272,7 +272,7 @@ export async function findOrCreateByProvider(params: {
     };
   }
 
-  // 2. Check if email matches an existing user (auto-link if verified)
+  // 2. Check if email matches an existing user (auto-link to unified account)
   if (params.email) {
     const emailUser = await findUserByEmail(params.email);
     if (emailUser) {

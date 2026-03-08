@@ -47,15 +47,24 @@ export function ensureSchema() {
     const sqlite = getSqlite();
 
     // Run migrations in order
-    const migrationFiles = ["0000_init.sql", "0001_auth_upgrade.sql"];
+    const migrationFiles = [
+      "0000_init.sql", 
+      "0001_auth_upgrade.sql",
+      "0002_preferences.sql"
+    ];
 
     for (const file of migrationFiles) {
       const migrationCandidates = [
+        path.join(__dirname, "drizzle", file),
+        path.join(__dirname, "server", "drizzle", file),
         path.join(process.cwd(), "drizzle", file),
         path.join(process.cwd(), "server", "drizzle", file),
       ];
       const migrationPath = migrationCandidates.find((c) => fs.existsSync(c));
-      if (!migrationPath) continue;
+      if (!migrationPath) {
+        console.warn(`[ensureSchema] Could not find migration file: ${file}`);
+        continue;
+      }
 
       try {
         const sql = fs.readFileSync(migrationPath, "utf-8");

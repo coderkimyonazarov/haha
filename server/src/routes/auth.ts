@@ -22,6 +22,7 @@ import {
   createSession,
   findOrCreateByProvider,
   findUserByEmail,
+  findUserByUsername,
   createUser,
   linkProvider,
   hashPassword,
@@ -165,13 +166,17 @@ router.post("/register", async (req, res, next) => {
   }
 });
 
-// ── Email Login ───────────────────────────────────────────────────────────────
+// ── Email / Username Login ───────────────────────────────────────────────────────────────
 router.post("/login", async (req, res, next) => {
   try {
     const input = parseWithSchema(loginSchema, req.body);
-    const email = input.email.toLowerCase().trim();
+    const identifier = input.identifier.toLowerCase().trim();
 
-    const user = await findUserByEmail(email);
+    let user = await findUserByEmail(identifier);
+    if (!user) {
+      user = await findUserByUsername(identifier);
+    }
+    
     if (!user) {
       throw new AppError(
         "INVALID_CREDENTIALS",
