@@ -1,0 +1,14 @@
+{
+  "buildCommand": "npm install && npm --workspace server run build && npm --workspace web run build",
+  "outputDirectory": "web/dist",
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
