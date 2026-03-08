@@ -67,6 +67,31 @@ function isEmailIdentifier(identifier: string): boolean {
   return /^\S+@\S+\.\S+$/.test(identifier);
 }
 
+function getUserProviders(user: any): Set<string> {
+  const providers = new Set<string>();
+
+  const metaProviders = user?.app_metadata?.providers;
+  if (Array.isArray(metaProviders)) {
+    for (const provider of metaProviders) {
+      if (typeof provider === "string" && provider.length > 0) {
+        providers.add(provider);
+      }
+    }
+  }
+
+  const identities = user?.identities;
+  if (Array.isArray(identities)) {
+    for (const identity of identities) {
+      const provider = identity?.provider;
+      if (typeof provider === "string" && provider.length > 0) {
+        providers.add(provider);
+      }
+    }
+  }
+
+  return providers;
+}
+
 async function resolveSupabaseUserFromBearerToken(authorization?: string) {
   if (!authorization?.startsWith("Bearer ")) {
     return null;
@@ -390,6 +415,39 @@ router.post("/login", authLimiter, async (req, res) => {
     );
 
     if (authError || !authData.session || !authData.user) {
+      const { data: adminUserRes, error: listUsersError } = await getSupabaseAdmin()
+        .auth.admin.listUsers({ search: emailForLogin });
+
+      if (!listUsersError) {
+        const existingUser = adminUserRes?.users?.find(
+          (u) => u.email?.toLowerCase() === emailForLogin.toLowerCase(),
+        );
+
+        if (existingUser) {
+          const providers = getUserProviders(existingUser);
+          const hasEmailProvider = providers.has("email");
+          const hasGoogleProvider = providers.has("google");
+
+          logAuthDebug("login", requestId, "password login rejected for existing account", {
+            identifierIsEmail,
+            userId: existingUser.id,
+            providers: Array.from(providers),
+            hasEmailProvider,
+            hasGoogleProvider,
+          });
+
+          if (!hasEmailProvider && hasGoogleProvider) {
+            return res.status(401).json({
+              ok: false,
+              error: {
+                code: "SOCIAL_LOGIN_REQUIRED",
+                message: "This account was created with Google. Please sign in with Google.",
+              },
+            });
+          }
+        }
+      }
+
       logAuthDebug("login", requestId, "supabase password auth failure", {
         hasSession: Boolean(authData?.session),
         hasUser: Boolean(authData?.user),

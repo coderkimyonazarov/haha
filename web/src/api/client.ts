@@ -5,6 +5,7 @@ export type ApiError = {
   code: string;
   message: string;
   details?: unknown;
+  status?: number;
 };
 
 const BASE_URL = import.meta.env.VITE_API_URL || "";
@@ -64,8 +65,11 @@ export async function apiFetch<T>(
     throw fallback.error;
   }
   if (!data.ok) {
-    const err = data.error as ApiError;
-    if (!config.silent) {
+    const err = {
+      ...(data.error as ApiError),
+      status: res.status,
+    } as ApiError;
+    if (!config.silent && ![400, 401, 403, 409, 429].includes(res.status)) {
       toast.error(err.message || "Request failed");
     }
     throw err;
