@@ -171,10 +171,13 @@ export default function Login() {
             </button>
             <button
               type="button"
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${tab === "phone" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setTab("phone")}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors opacity-50 cursor-not-allowed ${tab === "phone" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              onClick={(e) => {
+                e.preventDefault();
+                toast.info("Telefon orqali kirish tez orada qo'shiladi!");
+              }}
             >
-              Phone
+              Phone (Tez orada...)
             </button>
           </div>
 

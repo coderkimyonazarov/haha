@@ -42,8 +42,12 @@ const serverEnvSchema = z.object({
   // CORS
   CORS_ORIGIN: z.string().optional().default("http://localhost:5173"),
 
-  // AI Provider (existing)
+  // AI Providers
   OPENAI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  
   APP_VERSION: z.string().optional().default("0.2.0"),
 });
 

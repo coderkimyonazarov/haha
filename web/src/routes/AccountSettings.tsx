@@ -45,7 +45,7 @@ const PROVIDER_INFO: Record<
     color: "text-rose-500",
   },
   phone: {
-    label: "Phone Number",
+    label: "Phone Number (Tez orada...)",
     icon: <Smartphone className="w-5 h-5" />,
     color: "text-emerald-500",
   },
