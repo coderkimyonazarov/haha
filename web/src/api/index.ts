@@ -175,6 +175,13 @@ export async function setUsername(username: string, password?: string) {
   });
 }
 
+export async function setPassword(password: string) {
+  return apiFetch<{ updated: boolean }>("/api/auth/set-password", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
 export async function logout() {
   return apiFetch<{ loggedOut: boolean }>("/api/auth/logout", {
     method: "POST",

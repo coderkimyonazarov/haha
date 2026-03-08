@@ -17,6 +17,8 @@ export default function Register() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const submitLockRef = React.useRef(false);
+  const telegramLockRef = React.useRef(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const formRef = React.useRef<HTMLDivElement>(null);
@@ -33,6 +35,8 @@ export default function Register() {
 
   const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || submitLockRef.current) return;
+    submitLockRef.current = true;
     setLoading(true);
 
     try {
@@ -51,13 +55,23 @@ export default function Register() {
       toast.success("Registration successful. Continue by choosing your username.");
       navigate("/set-username");
     } catch (err: any) {
-      toast.error(err.message || "Registration failed");
+      // eslint-disable-next-line no-console
+      console.error("email registration failed", err);
+      const isRateLimited =
+        err?.status === 429 ||
+        err?.code === "RATE_LIMIT" ||
+        (typeof err?.message === "string" && err.message.toLowerCase().includes("rate"));
+      toast.error(isRateLimited ? "Signup is rate limited. Please wait 30-60 seconds." : err.message || "Registration failed");
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    if (loading || submitLockRef.current) return;
+    submitLockRef.current = true;
+    setLoading(true);
     try {
       const redirectUrl = `${window.location.origin}/dashboard`;
 
@@ -72,7 +86,12 @@ export default function Register() {
         throw error;
       }
     } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("google oauth registration failed", err);
       toast.error(err.message || "Google registration failed");
+    } finally {
+      submitLockRef.current = false;
+      setLoading(false);
     }
   };
 
@@ -80,6 +99,8 @@ export default function Register() {
     (window as Window & { onTelegramAuth?: (user: Record<string, unknown>) => Promise<void> }).onTelegramAuth = async (
       user: Record<string, unknown>,
     ) => {
+      if (telegramLockRef.current) return;
+      telegramLockRef.current = true;
       try {
         const res = await telegramAuth(user);
         if ("accessToken" in res) {
@@ -91,6 +112,8 @@ export default function Register() {
         toast.error("Telegram registration response is invalid");
       } catch (err: any) {
         toast.error(err?.message || "Telegram login failed");
+      } finally {
+        telegramLockRef.current = false;
       }
     };
   }, [setTelegramSession, navigate]);

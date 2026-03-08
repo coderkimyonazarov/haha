@@ -18,7 +18,7 @@ export const globalLimiter = rateLimit({
 // ── Auth routes rate limiter ──────────────────────────────────────────────────
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30,
+  max: 25,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -26,6 +26,21 @@ export const authLimiter = rateLimit({
     error: {
       code: "RATE_LIMIT",
       message: "Too many authentication attempts, please try again later.",
+    },
+  },
+});
+
+// ── Auth read endpoints limiter (username checks, health, me) ───────────────
+export const authReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    ok: false,
+    error: {
+      code: "RATE_LIMIT",
+      message: "Too many auth status requests, please slow down.",
     },
   },
 });

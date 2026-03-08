@@ -19,6 +19,8 @@ export default function Login() {
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const submitLockRef = React.useRef(false);
+  const telegramLockRef = React.useRef(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const formRef = React.useRef<HTMLDivElement>(null);
@@ -35,12 +37,27 @@ export default function Login() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || submitLockRef.current) return;
+    submitLockRef.current = true;
     setLoading(true);
     try {
-      const response = await login({
-        identifier: identifier.trim(),
-        password,
-      });
+      const attemptLogin = () =>
+        login({
+          identifier: identifier.trim(),
+          password,
+        });
+
+      let response;
+      try {
+        response = await attemptLogin();
+      } catch (firstErr: any) {
+        if (firstErr?.code === "AUTH_SERVICE_UNAVAILABLE") {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          response = await attemptLogin();
+        } else {
+          throw firstErr;
+        }
+      }
 
       const { error } = await supabase.auth.setSession({
         access_token: response.session.access_token,
@@ -54,13 +71,23 @@ export default function Login() {
       await refreshProfile();
       navigate("/dashboard");
     } catch (err: any) {
-      toast.error(err.message || "Login failed");
+      // Surface detailed error information for debugging while keeping user-facing toast simple.
+      // eslint-disable-next-line no-console
+      console.error("email/username login failed", err);
+      const isRateLimited =
+        err?.code === "RATE_LIMIT" ||
+        (typeof err?.message === "string" && err.message.toLowerCase().includes("rate"));
+      toast.error(isRateLimited ? "Too many attempts. Please wait and try again." : err.message || "Login failed");
     } finally {
+      submitLockRef.current = false;
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    if (loading || submitLockRef.current) return;
+    submitLockRef.current = true;
+    setLoading(true);
     try {
       const redirectUrl = `${window.location.origin}/dashboard`;
 
@@ -75,7 +102,12 @@ export default function Login() {
         throw error;
       }
     } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("google oauth login failed", err);
       toast.error(err.message || "Google login failed");
+    } finally {
+      submitLockRef.current = false;
+      setLoading(false);
     }
   };
 
@@ -83,6 +115,8 @@ export default function Login() {
     (window as Window & { onTelegramAuth?: (user: Record<string, unknown>) => Promise<void> }).onTelegramAuth = async (
       user: Record<string, unknown>,
     ) => {
+      if (telegramLockRef.current) return;
+      telegramLockRef.current = true;
       try {
         const res = await telegramAuth(user);
         if ("accessToken" in res) {
@@ -94,6 +128,8 @@ export default function Login() {
         toast.error("Telegram login response is invalid");
       } catch (err: any) {
         toast.error(err?.message || "Telegram login failed");
+      } finally {
+        telegramLockRef.current = false;
       }
     };
   }, [setTelegramSession, navigate]);

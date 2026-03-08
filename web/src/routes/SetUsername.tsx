@@ -1,8 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
-import { checkUsername, setUsername } from "../api";
-import { supabase } from "../lib/supabase";
+import { checkUsername, setPassword, setUsername } from "../api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -75,14 +74,10 @@ export default function SetUsername() {
     setLoading(true);
     try {
       if (password.length >= 8) {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { error } = await supabase.auth.updateUser({ password });
-          if (error) {
-            toast.error("Password update failed; username setup will continue.");
-          }
-        } else {
-          toast.info("Password setup is available after linking email or Google in Account settings.");
+        try {
+          await setPassword(password);
+        } catch {
+          toast.error("Password update failed; username setup will continue.");
         }
       }
 

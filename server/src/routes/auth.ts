@@ -8,6 +8,7 @@ import { linkedIdentities, studentProfiles } from "../db/schema";
 import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
 import { getSupabaseAdmin, getSupabaseAnon, getSupabaseConfigStatus } from "../utils/supabase";
 import { AppError } from "../utils/error";
+import { authLimiter, authReadLimiter } from "../middleware/rateLimit";
 import { parseWithSchema } from "../utils/validation";
 import {
   loginSchema,
@@ -16,10 +17,14 @@ import {
   normalizeUsername,
   validateNormalizedUsername,
 } from "../validators/auth";
+import { z } from "zod";
 
 const router = Router();
 
 const TELEGRAM_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+const setPasswordSchema = z.object({
+  password: z.string().min(8).max(128),
+});
 
 function formatErrorForLog(error: unknown) {
   if (error instanceof Error) {
@@ -103,7 +108,7 @@ function signTelegramToken(userId: string, telegramUserId: string): string {
   );
 }
 
-router.get("/health-auth", async (req, res) => {
+router.get("/health-auth", authReadLimiter, async (req, res) => {
   const requestId = ((req as { id?: string }).id ?? "unknown").toString();
 
   try {
@@ -145,7 +150,7 @@ router.get("/health-auth", async (req, res) => {
   }
 });
 
-router.get("/check-username", async (req, res) => {
+router.get("/check-username", authReadLimiter, async (req, res) => {
   const requestId = ((req as { id?: string }).id ?? "unknown").toString();
 
   try {
@@ -228,7 +233,7 @@ router.get("/check-username", async (req, res) => {
   }
 });
 
-router.post("/set-username", async (req, res, next) => {
+router.post("/set-username", authLimiter, async (req, res, next) => {
   try {
     const input = parseWithSchema(usernameSchema, req.body);
     const user = await resolveSupabaseUserFromBearerToken(req.headers.authorization);
@@ -281,7 +286,7 @@ router.post("/set-username", async (req, res, next) => {
   }
 });
 
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
   const requestId = ((req as { id?: string }).id ?? "unknown").toString();
 
   try {
@@ -423,7 +428,9 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.post("/telegram", async (req, res, next) => {
+router.post("/telegram", authLimiter, async (req, res, next) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+
   try {
     const input = parseWithSchema(telegramAuthSchema, req.body) as TelegramAuthData;
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -442,6 +449,13 @@ router.post("/telegram", async (req, res, next) => {
     const sessionUser = await resolveSupabaseUserFromBearerToken(req.headers.authorization);
 
     if (sessionUser) {
+      logAuthDebug("telegram", requestId, "linking telegram to existing user", {
+        userId: sessionUser.id,
+        telegramUserId,
+        dbConfig: getDbConfigStatus(),
+        supabaseConfig: getSupabaseConfigStatus(),
+      });
+
       const existingProviderLink = await db
         .select({ id: linkedIdentities.id })
         .from(linkedIdentities)
@@ -454,6 +468,11 @@ router.post("/telegram", async (req, res, next) => {
         .limit(1);
 
       if (existingProviderLink.length > 0) {
+        logAuthDebug("telegram", requestId, "link attempt conflicts with existing link", {
+          userId: sessionUser.id,
+          telegramUserId,
+          existingLinkId: existingProviderLink[0].id,
+        });
         throw new AppError("PROVIDER_CONFLICT", "Telegram account is already linked", 409);
       }
 
@@ -473,6 +492,12 @@ router.post("/telegram", async (req, res, next) => {
       });
     }
 
+    logAuthDebug("telegram", requestId, "login via telegram widget", {
+      telegramUserId,
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
+
     const existingLink = await db
       .select({ userId: linkedIdentities.userId })
       .from(linkedIdentities)
@@ -488,6 +513,9 @@ router.post("/telegram", async (req, res, next) => {
 
     if (existingLink.length > 0) {
       userId = existingLink[0].userId;
+      logAuthDebug("telegram", requestId, "found existing telegram-linked user", {
+        userId,
+      });
     } else {
       const syntheticEmail = `telegram_${telegramUserId}@users.telegram.local`;
       const generatedPassword = randomBytes(48).toString("hex");
@@ -504,6 +532,9 @@ router.post("/telegram", async (req, res, next) => {
       });
 
       if (createError || !created.user) {
+        logAuthDebug("telegram", requestId, "supabase user creation failed", {
+          supabaseError: createError?.message ?? null,
+        });
         throw new AppError("CREATE_FAILED", "Failed to create Telegram account", 500);
       }
 
@@ -523,6 +554,10 @@ router.post("/telegram", async (req, res, next) => {
 
     const accessToken = signTelegramToken(userId, telegramUserId);
 
+    logAuthDebug("telegram", requestId, "issued telegram access token", {
+      userId,
+    });
+
     return res.json({
       ok: true,
       data: {
@@ -532,6 +567,11 @@ router.post("/telegram", async (req, res, next) => {
       },
     });
   } catch (error) {
+    logAuthDebug("telegram", requestId, "route failed", {
+      error: formatErrorForLog(error),
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
     next(error);
   }
 });
@@ -602,11 +642,54 @@ router.get("/me", async (req, res, next) => {
   }
 });
 
+router.post("/set-password", authLimiter, async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        ok: false,
+        error: { code: "UNAUTHORIZED", message: "Authentication required" },
+      });
+    }
+
+    const input = parseWithSchema(setPasswordSchema, req.body);
+    logAuthDebug("set-password", requestId, "password update requested", {
+      userId: req.user.id,
+      hasSupabaseEmail: Boolean(req.user.email),
+    });
+
+    const { data, error } = await getSupabaseAdmin().auth.admin.updateUserById(req.user.id, {
+      password: input.password,
+    });
+
+    if (error || !data.user) {
+      logAuthDebug("set-password", requestId, "password update failed", {
+        supabaseError: error?.message ?? null,
+      });
+      return res.status(503).json({
+        ok: false,
+        error: { code: "AUTH_SERVICE_UNAVAILABLE", message: "Password update failed" },
+      });
+    }
+
+    return res.json({ ok: true, data: { updated: true } });
+  } catch (error) {
+    logAuthDebug("set-password", requestId, "route failed", {
+      error: formatErrorForLog(error),
+    });
+    return res.status(503).json({
+      ok: false,
+      error: { code: "AUTH_SERVICE_UNAVAILABLE", message: "Password update failed" },
+    });
+  }
+});
+
 router.post("/logout", async (_req, res) => {
   return res.json({ ok: true, data: { loggedOut: true } });
 });
 
-router.post("/admin-login", async (req, res, next) => {
+router.post("/admin-login", authLimiter, async (req, res, next) => {
   try {
     const { username, password } = req.body;
     if (

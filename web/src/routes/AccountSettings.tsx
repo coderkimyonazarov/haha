@@ -1,5 +1,5 @@
 import React from "react";
-import { getProviders, unlinkProvider, setUsername, linkTelegram, linkGoogle, type AuthProvider } from "../api";
+import { getProviders, unlinkProvider, setUsername, linkTelegram, type AuthProvider } from "../api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../lib/auth";
@@ -16,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import gsap from "gsap";
+import { supabase } from "../lib/supabase";
 
 const PROVIDER_INFO: Record<
   string,
@@ -50,6 +51,7 @@ export default function AccountSettings() {
   const [unlinking, setUnlinking] = React.useState<string | null>(null);
   const [newUsername, setNewUsername] = React.useState(user?.username || "");
   const [savingUsername, setSavingUsername] = React.useState(false);
+  const [linkingGoogle, setLinkingGoogle] = React.useState(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -90,17 +92,6 @@ export default function AccountSettings() {
         toast.error(err?.message || "Telegram linking failed");
       }
     };
-
-    (window as any).handleGoogleLink = async (response: { credential: string }) => {
-      try {
-        await linkGoogle(response.credential);
-        toast.success("Google mapped to identity successfully");
-        await fetchProviders();
-        await refresh();
-      } catch (err: any) {
-        toast.error(err?.message || "Google linking failed");
-      }
-    };
   }, [fetchProviders, refresh]);
 
   // ── Render Dynamic Widgets ──
@@ -125,22 +116,30 @@ export default function AccountSettings() {
       }
     }
 
-    // Google
-    if (!providers.find(p => p.provider === "google")) {
-      const gContainer = document.getElementById("google-link-container");
-      if (gContainer && (window as any).google?.accounts?.id) {
-        (window as any).google.accounts.id.initialize({
-          client_id: (window as any).__GOOGLE_CLIENT_ID,
-          callback: (window as any).handleGoogleLink,
-        });
-        (window as any).google.accounts.id.renderButton(gContainer, {
-          theme: "outline",
-          size: "medium",
-          shape: "pill"
-        });
-      }
-    }
   }, [loading, providers]);
+
+  const handleLinkGoogle = async () => {
+    if (linkingGoogle) return;
+    setLinkingGoogle(true);
+    try {
+      const redirectUrl = `${window.location.origin}/account`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+        },
+      });
+      if (error) {
+        throw error;
+      }
+      toast.success("Redirecting to Google to complete linking…");
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error("google linking via supabase oauth failed", err);
+      toast.error(err?.message || "Google linking failed");
+      setLinkingGoogle(false);
+    }
+  };
 
   const handleUnlink = async (provider: string) => {
     const info = PROVIDER_INFO[provider];
@@ -336,7 +335,19 @@ export default function AccountSettings() {
                             {providerKey === "telegram" ? (
                               <div id="telegram-link-container" className="scale-90 origin-left sm:origin-right" />
                             ) : providerKey === "google" ? (
-                              <div id="google-link-container" className="scale-90 origin-left sm:origin-right" />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="font-semibold rounded-lg"
+                                disabled={linkingGoogle}
+                                onClick={handleLinkGoogle}
+                              >
+                                {linkingGoogle ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  "Link with Google"
+                                )}
+                              </Button>
                             ) : providerKey === "phone" ? (
                               <span className="text-xs font-bold text-muted-foreground uppercase px-2">Pending</span>
                             ) : (

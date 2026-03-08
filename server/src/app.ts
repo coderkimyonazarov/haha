@@ -8,7 +8,7 @@ import { ensureSchema, getDb } from "./db";
 import { requestId } from "./middleware/requestId";
 import { authOptional, requireAdmin } from "./middleware/auth";
 import { errorHandler } from "./middleware/errorHandler";
-import { globalLimiter, authLimiter } from "./middleware/rateLimit";
+import { globalLimiter } from "./middleware/rateLimit";
 
 import authRouter from "./routes/auth";
 import accountLinkRouter from "./routes/accountLink";
@@ -68,8 +68,8 @@ app.use(globalLimiter);
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 
-// Auth (optional auth middleware so /me works, rate limited)
-app.use("/api/auth", authLimiter, authOptional, authRouter);
+// Auth (optional auth middleware so /me works)
+app.use("/api/auth", authOptional, authRouter);
 
 // Account linking (requires auth — handled inside route)
 app.use("/api/account", authOptional, accountLinkRouter);
