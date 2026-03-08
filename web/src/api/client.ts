@@ -7,6 +7,8 @@ export type ApiError = {
   details?: unknown;
 };
 
+const BASE_URL = import.meta.env.VITE_API_URL || "";
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -20,10 +22,13 @@ export async function apiFetch<T>(
     headers.set("Authorization", `Bearer ${session.access_token}`);
   }
 
-  const res = await fetch(path, {
+  const fullUrl = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+  const isAdminRoute = path.includes("/admin");
+
+  const res = await fetch(fullUrl, {
     ...options,
     headers,
-    credentials: "omit" // Supabase JWT is enough now
+    credentials: isAdminRoute ? "include" : "omit" // Admin relies on cross-domain cookies
   });
 
   let data: any = null;

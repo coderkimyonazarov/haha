@@ -38,10 +38,25 @@ const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      
+      const isAllowed = 
+        allowedOrigins.includes(origin) ||
+        origin.endsWith(".vercel.app") ||
+        origin === "https://sypev.com" ||
+        origin === "https://www.sypev.com" ||
+        origin === process.env.VITE_API_URL;
+        
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-custom-auth", "sypev-admin"],
   }),
 );
 

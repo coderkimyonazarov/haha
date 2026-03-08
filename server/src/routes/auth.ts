@@ -270,5 +270,52 @@ router.get("/me", async (req, res, next) => {
     next(error);
   }
 });
+// ── Admin Native Fallback ─────────────────────────────────────────────────────────
+router.post("/admin-login", async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+    if (
+      username === process.env.ADMIN_USERNAME &&
+      password === process.env.ADMIN_PASSWORD &&
+      username !== undefined
+    ) {
+      res.cookie("sypev_admin", "true", {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+      });
+      return res.json({ ok: true, data: { admin: true } });
+    }
+    throw new AppError("UNAUTHORIZED", "Invalid admin credentials", 401);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/admin-logout", async (req, res, next) => {
+  try {
+    res.clearCookie("sypev_admin", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+    res.json({ ok: true, data: { loggedOut: true } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/admin-me", async (req, res, next) => {
+  try {
+    const adminCookie = req.cookies?.["sypev_admin"];
+    if (adminCookie) {
+      return res.json({ ok: true, data: { admin: true } });
+    }
+    return res.json({ ok: true, data: { admin: false } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 export default router;
