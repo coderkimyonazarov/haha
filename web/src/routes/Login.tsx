@@ -64,10 +64,15 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
+      // Supabase strictly checks the exact redirect URL against its whitelist.
+      const redirectUrl = import.meta.env.VITE_WEBSITE_URL 
+        ? `${import.meta.env.VITE_WEBSITE_URL}/dashboard`
+        : `${window.location.origin}/dashboard`;
+        
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/dashboard'
+          redirectTo: redirectUrl
         }
       });
       if (error) throw error;

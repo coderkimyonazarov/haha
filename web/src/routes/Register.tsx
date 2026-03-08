@@ -58,10 +58,14 @@ export default function Register() {
 
   const handleGoogleLogin = async () => {
     try {
+      const redirectUrl = import.meta.env.VITE_WEBSITE_URL 
+        ? `${import.meta.env.VITE_WEBSITE_URL}/dashboard`
+        : `${window.location.origin}/dashboard`;
+        
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/dashboard'
+          redirectTo: redirectUrl
         }
       });
       if (error) throw error;
