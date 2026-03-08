@@ -11,18 +11,33 @@ import Login from "./routes/Login";
 import Profile from "./routes/Profile";
 import Register from "./routes/Register";
 import StudySat from "./routes/StudySat";
-import Tutor from "./routes/Tutor";
+import AiChat from "./routes/AiChat";
 import Universities from "./routes/Universities";
 import UniversityDetail from "./routes/UniversityDetail";
 import AdminLogin from "./routes/AdminLogin";
+import SetUsername from "./routes/SetUsername";
+import Onboarding from "./routes/Onboarding";
+import ForgotPassword from "./routes/ForgotPassword";
+import ResetPassword from "./routes/ResetPassword";
+import AccountSettings from "./routes/AccountSettings";
+import ContentFeed from "./routes/ContentFeed";
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
-  const { user, loading } = useAuth();
+  const { user, preferences, loading } = useAuth();
   if (loading) {
     return <div className="p-10 text-muted-foreground">Loading...</div>;
   }
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  // 1. Require username
+  if (!user.username) {
+    return <Navigate to="/set-username" replace />;
+  }
+  // 2. Require onboarding (if not on onboarding page)
+  const isOnboarding = window.location.pathname === "/onboarding";
+  if (preferences && preferences.onboardingDone === 0 && !isOnboarding) {
+    return <Navigate to="/onboarding" replace />;
   }
   return children;
 }
@@ -77,10 +92,13 @@ function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={shellRef}
-      className="relative min-h-screen bg-[radial-gradient(circle_at_top,_#e0f2fe,_transparent_55%),radial-gradient(circle_at_20%_20%,_#fef3c7,_transparent_45%),radial-gradient(circle_at_80%_30%,_#ccfbf1,_transparent_55%)]"
+       className="relative min-h-screen transition-colors duration-500 bg-background"
     >
       <div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-70"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-30 dark:opacity-10"
+         style={{
+           backgroundImage: "radial-gradient(circle at 50% 0%, hsl(var(--primary) / 0.15), transparent 70%)"
+         }}
         aria-hidden
       />
       <header
@@ -127,7 +145,19 @@ function Layout({ children }: { children: React.ReactNode }) {
                 to="/tutor"
                 className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
               >
-                AI Tutor
+                AI Counselor
+              </Link>
+              <Link
+                to="/feed"
+                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
+              >
+                Discovery
+              </Link>
+              <Link
+                to="/account"
+                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
+              >
+                Account
               </Link>
               {user.isAdmin === 1 && (
                 <Link
@@ -191,6 +221,9 @@ export default function App() {
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/set-username" element={<SetUsername />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route
                   path="/dashboard"
                   element={
@@ -240,10 +273,34 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <Onboarding />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/tutor"
                   element={
                     <ProtectedRoute>
-                      <Tutor />
+                      <AiChat />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/feed"
+                  element={
+                    <ProtectedRoute>
+                      <ContentFeed />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/account"
+                  element={
+                    <ProtectedRoute>
+                      <AccountSettings />
                     </ProtectedRoute>
                   }
                 />

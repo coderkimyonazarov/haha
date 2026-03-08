@@ -1,61 +1,81 @@
 import express from "express";
-import cookieParser from "cookie-parser";
 import path from "path";
-import fs from "fs";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import helmet from "helmet";
+
+import { ensureSchema, getDb } from "./db";
+import { requestId } from "./middleware/requestId";
+import { authOptional, requireAdmin } from "./middleware/auth";
+import { errorHandler } from "./middleware/errorHandler";
+import { globalLimiter, authLimiter } from "./middleware/rateLimit";
+
 import authRouter from "./routes/auth";
+import accountLinkRouter from "./routes/accountLink";
 import profileRouter from "./routes/profile";
 import universitiesRouter from "./routes/universities";
 import admissionsRouter from "./routes/admissions";
 import aiRouter from "./routes/ai";
-import satRouter from "./routes/sat";
 import adminRouter from "./routes/admin";
-import { requestId } from "./middleware/requestId";
-import { authOptional, authRequired, requireAdmin } from "./middleware/auth";
-import { errorHandler } from "./middleware/errorHandler";
-import { AppError } from "./utils/error";
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+ensureSchema();
 
 const app = express();
 
+// ── Security Headers ──────────────────────────────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Allow inline scripts for Telegram widget etc.
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim());
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
+// ── Global Middleware ─────────────────────────────────────────────────────────
 app.use(requestId);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+app.use(globalLimiter);
 
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    version: process.env.APP_VERSION || "0.1.0",
-  });
-});
+// ── API Routes ────────────────────────────────────────────────────────────────
 
-app.use("/api/auth", authOptional, authRouter);
-app.use("/api/profile", authRequired, profileRouter);
+// Auth (optional auth middleware so /me works, rate limited)
+app.use("/api/auth", authLimiter, authOptional, authRouter);
+
+// Account linking (requires auth — handled inside route)
+app.use("/api/account", authOptional, accountLinkRouter);
+
+// Protected routes
+app.use("/api/profile", authOptional, profileRouter);
 app.use("/api/universities", authOptional, universitiesRouter);
-app.use("/api/sat", authOptional, satRouter);
-app.use("/api/admissions", authRequired, admissionsRouter);
-app.use("/api/ai", authRequired, aiRouter);
-app.use("/api/admin", authRequired, requireAdmin, adminRouter);
+app.use("/api/admissions", authOptional, admissionsRouter);
+app.use("/api/ai", authOptional, aiRouter);
 
-const webDistCandidates = [
-  path.resolve(process.cwd(), "web", "dist"),
-  path.resolve(__dirname, "..", "..", "web", "dist"),
-];
-const webDist = webDistCandidates.find((candidate) => fs.existsSync(candidate));
-if (webDist) {
-  app.use(express.static(webDist));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api")) {
-      return next();
-    }
-    res.sendFile(path.join(webDist, "index.html"));
-  });
-}
+// Admin routes
+app.use("/api/admin", requireAdmin, adminRouter);
 
-app.use((_req, _res, next) => {
-  next(new AppError("NOT_FOUND", "Route not found", 404));
+// ── Static + SPA Fallback ─────────────────────────────────────────────────────
+const distPath = path.join(__dirname, "..", "..", "web", "dist");
+app.use(express.static(distPath));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
 });
 
+// ── Error Handler ─────────────────────────────────────────────────────────────
 app.use(errorHandler);
 
-export default app;
+export { app };

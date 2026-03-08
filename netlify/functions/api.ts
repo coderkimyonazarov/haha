@@ -1,14 +1,10 @@
+import "dotenv/config"; // Must be first — loads env vars before any other import
 import serverless from "serverless-http";
-import app from "../../server/src/app";
-import { ensureSchema, getDb } from "../../server/src/db";
+import { app } from "../../server/src/app";
 
-try {
-  ensureSchema();
-  getDb();
-} catch (error) {
-  console.error("Failed to initialize database:", error);
-}
+// app.ts calls ensureSchema() at module load time
+// so dotenv must be configured before the import above.
 
 export const handler = serverless(app, {
-  basePath: "/.netlify/functions/api"
+  basePath: "/.netlify/functions/api",
 });

@@ -1,55 +1,99 @@
-import React from "react";
-import { me, logout as apiLogout, type User, type Profile } from "../api";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import {
+  me,
+  logout as apiLogout,
+  type User,
+  type Profile,
+  type AuthProvider,
+  type UserPreferences,
+} from "../api";
+import { applyTheme } from "./theme";
 
 type AuthState = {
   user: User | null;
   profile: Profile | null;
+  providers: AuthProvider[];
+  preferences: UserPreferences | null;
   loading: boolean;
   refresh: () => Promise<void>;
+  refreshUser: () => Promise<void>; // Alias for convenience in components
   logout: () => Promise<void>;
 };
 
-const AuthContext = React.createContext<AuthState | undefined>(undefined);
+const AuthContext = createContext<AuthState>({
+  user: null,
+  profile: null,
+  providers: [],
+  preferences: null,
+  loading: true,
+  refresh: async () => {},
+  refreshUser: async () => {},
+  logout: async () => {},
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = React.useState<User | null>(null);
-  const [profile, setProfile] = React.useState<Profile | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [providers, setProviders] = useState<AuthProvider[]>([]);
+  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = React.useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const data = await me();
-      setUser(data.user);
-      setProfile(data.profile);
+      const res = await me();
+      setUser(res.user || null);
+      setProfile(res.profile || null);
+      setProviders(res.providers || []);
+      setPreferences(res.preferences || null);
+
+      if (res.preferences) {
+        applyTheme({
+          theme: res.preferences.theme,
+          accent: res.preferences.accent,
+          vibe: res.preferences.vibe,
+          onboardingDone: res.preferences.onboardingDone === 1,
+        });
+      }
     } catch {
       setUser(null);
       setProfile(null);
+      setProviders([]);
+      setPreferences(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  React.useEffect(() => {
+  const logout = useCallback(async () => {
+    try {
+      await apiLogout();
+    } finally {
+      setUser(null);
+      setProfile(null);
+      setProviders([]);
+      setPreferences(null);
+    }
+  }, []);
+
+  useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const logout = React.useCallback(async () => {
-    await apiLogout();
-    setUser(null);
-    setProfile(null);
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ user, profile, loading, refresh, logout }}>
+    <AuthContext.Provider
+      value={{ user, profile, providers, preferences, loading, refresh, refreshUser: refresh, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = React.useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return ctx;
+  return useContext(AuthContext);
 }

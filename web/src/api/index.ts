@@ -3,8 +3,30 @@ import { apiFetch } from "./client";
 export type User = {
   id: string;
   email: string | null;
+  username: string | null;
   name: string;
   isAdmin: number;
+  isVerified: number;
+  needsUsername?: boolean;
+};
+
+export type Theme = "light" | "dark" | "system";
+export type Accent = "sky" | "violet" | "rose" | "amber" | "emerald";
+export type Vibe = "minimal" | "playful" | "bold";
+
+export type UserPreferences = {
+  userId: string;
+  theme: Theme;
+  accent: Accent;
+  vibe: Vibe;
+  onboardingDone: number;
+  updatedAt: number;
+};
+
+export type AuthProvider = {
+  provider: string;
+  linkedAt: number;
+  providerEmail?: string;
 };
 export type Profile = {
   userId: string;
@@ -60,6 +82,63 @@ export async function login(payload: { email: string; password: string }) {
   });
 }
 
+export async function telegramAuth(data: Record<string, unknown>) {
+  return apiFetch<User & { isNewUser?: boolean; needsUsername?: boolean }>(
+    "/api/auth/telegram",
+    { method: "POST", body: JSON.stringify(data) },
+  );
+}
+
+export async function googleAuth(credential: string) {
+  return apiFetch<User & { isNewUser?: boolean; needsUsername?: boolean }>(
+    "/api/auth/google",
+    { method: "POST", body: JSON.stringify({ credential }) },
+  );
+}
+
+export async function phoneSendOtp(phone: string) {
+  return apiFetch<{ sent: boolean; message: string; code?: string }>(
+    "/api/auth/phone/send-otp",
+    { method: "POST", body: JSON.stringify({ phone }) },
+  );
+}
+
+export async function phoneVerifyOtp(phone: string, code: string) {
+  return apiFetch<User & { isNewUser?: boolean; needsUsername?: boolean }>(
+    "/api/auth/phone/verify-otp",
+    { method: "POST", body: JSON.stringify({ phone, code }) },
+  );
+}
+
+export async function forgotPassword(email: string) {
+  return apiFetch<{ message: string; token?: string }>(
+    "/api/auth/forgot-password",
+    { method: "POST", body: JSON.stringify({ email }) },
+  );
+}
+
+export async function resetPassword(token: string, password: string) {
+  return apiFetch<{ message: string }>("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+}
+
+export async function checkUsername(username: string) {
+  return apiFetch<{ available: boolean; error?: string }>(
+    `/api/auth/check-username?username=${encodeURIComponent(username)}`,
+    {},
+    { silent: true },
+  );
+}
+
+export async function setUsername(username: string) {
+  return apiFetch<User>("/api/auth/set-username", {
+    method: "POST",
+    body: JSON.stringify({ username }),
+  });
+}
+
 export async function logout() {
   return apiFetch<{ loggedOut: boolean }>("/api/auth/logout", {
     method: "POST",
@@ -67,11 +146,44 @@ export async function logout() {
 }
 
 export async function me() {
-  return apiFetch<{ user: User; profile: Profile | null }>(
-    "/api/auth/me",
-    {},
-    { silent: true },
-  );
+  return apiFetch<{
+    user: User;
+    profile: Profile | null;
+    providers?: AuthProvider[];
+    preferences?: UserPreferences;
+  }>("/api/auth/me", {}, { silent: true });
+}
+
+export async function updatePreferences(payload: Partial<UserPreferences>) {
+  return apiFetch<UserPreferences>("/api/auth/preferences", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ── Account Linking ──────────────────────────────────────────────────────────
+export async function getProviders() {
+  return apiFetch<AuthProvider[]>("/api/account/providers");
+}
+
+export async function linkTelegram(data: Record<string, unknown>) {
+  return apiFetch<{ linked: boolean }>("/api/account/link/telegram", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function linkGoogle(credential: string) {
+  return apiFetch<{ linked: boolean }>("/api/account/link/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
+  });
+}
+
+export async function unlinkProvider(provider: string) {
+  return apiFetch<{ unlinked: boolean }>(`/api/account/providers/${provider}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getProfile() {

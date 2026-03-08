@@ -1,11 +1,18 @@
 [build]
   base = "."
   publish = "web/dist"
-  command = "npm run build"
+  # Compile server TypeScript first, then build the web frontend
+  command = "npm --workspace server run build && npm --workspace web run build"
   functions = "netlify/functions"
 
 [functions]
-  included_files = ["server/drizzle/0000_init.sql"]
+  # Bundle both migrations into the function so the DB is fully initialized
+  included_files = [
+    "server/drizzle/0000_init.sql",
+    "server/drizzle/0001_auth_upgrade.sql",
+    "server/drizzle/0002_preferences.sql"
+  ]
+  node_bundler = "esbuild"
 
 [dev]
   command = "npm run dev"

@@ -1,10 +1,8 @@
 import dotenv from "dotenv";
-import app from "./app";
-import { ensureSchema, getDb } from "./db";
-
 dotenv.config();
-ensureSchema();
-getDb();
+
+// app.ts calls ensureSchema() at module level, so dotenv MUST be loaded first
+import { app } from "./app";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 

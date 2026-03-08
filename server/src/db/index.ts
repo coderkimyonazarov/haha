@@ -18,7 +18,10 @@ export function getDbPath() {
     return path.resolve("/tmp", process.env.DB_PATH || "sypev.sqlite");
   }
 
-  return path.resolve(process.cwd(), process.env.DB_PATH || "./data/dev.sqlite");
+  return path.resolve(
+    process.cwd(),
+    process.env.DB_PATH || "./data/dev.sqlite",
+  );
 }
 
 export function ensureDataDir(dbPath: string) {
@@ -33,6 +36,8 @@ export function getSqlite() {
     const dbPath = getDbPath();
     ensureDataDir(dbPath);
     sqliteInstance = new Database(dbPath);
+    sqliteInstance.pragma("journal_mode = WAL");
+    sqliteInstance.pragma("foreign_keys = ON");
   }
   return sqliteInstance;
 }
@@ -40,27 +45,34 @@ export function getSqlite() {
 export function ensureSchema() {
   try {
     const sqlite = getSqlite();
-    const row = sqlite
-      .prepare("select name from sqlite_master where type='table' and name='users'")
-      .get();
-    if (row) {
-      return;
+
+    // Run migrations in order
+    const migrationFiles = ["0000_init.sql", "0001_auth_upgrade.sql"];
+
+    for (const file of migrationFiles) {
+      const migrationCandidates = [
+        path.join(process.cwd(), "drizzle", file),
+        path.join(process.cwd(), "server", "drizzle", file),
+      ];
+      const migrationPath = migrationCandidates.find((c) => fs.existsSync(c));
+      if (!migrationPath) continue;
+
+      try {
+        const sql = fs.readFileSync(migrationPath, "utf-8");
+        sqlite.exec(sql);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          (error.message.includes("already exists") ||
+            error.message.includes("duplicate column"))
+        ) {
+          continue;
+        }
+        console.warn(`Migration ${file} warning:`, error);
+      }
     }
-    const migrationCandidates = [
-      path.join(process.cwd(), "drizzle", "0000_init.sql"),
-      path.join(process.cwd(), "server", "drizzle", "0000_init.sql")
-    ];
-    const migrationPath = migrationCandidates.find((candidate) => fs.existsSync(candidate));
-    if (!migrationPath) {
-      console.warn(`Migration file not found. Tried: ${migrationCandidates.join(", ")}`);
-      return;
-    }
-    const sql = fs.readFileSync(migrationPath, "utf-8");
-    sqlite.exec(sql);
   } catch (error) {
-    if (error instanceof Error && error.message.includes("already exists")) {
-      return;
-    }
+    console.error("Schema migration error:", error);
     throw error;
   }
 }
