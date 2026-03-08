@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { supabaseAdmin } from "../utils/supabase";
+import { getSupabaseAdmin } from "../utils/supabase";
 import { AppError } from "../utils/error";
 import { getDb } from "../db";
 import { auditLogs, universities } from "../db/schema";
@@ -9,7 +9,7 @@ const router = Router();
 
 router.get("/dashboard-stats", async (req, res, next) => {
   try {
-    const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+    const { data: { users }, error } = await getSupabaseAdmin().auth.admin.listUsers();
     const db = getDb();
     const [auditCountResult, universityCountResult] = await Promise.all([
       db.$count(auditLogs),
@@ -31,7 +31,7 @@ router.get("/dashboard-stats", async (req, res, next) => {
 
 router.get("/users", async (req, res, next) => {
   try {
-    const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers();
+    const { data: { users }, error } = await getSupabaseAdmin().auth.admin.listUsers();
     if (error) throw new AppError("SERVER_ERROR", error.message, 500);
 
     const mappedUsers = users.map(u => ({

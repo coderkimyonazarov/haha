@@ -5,11 +5,19 @@ import * as schema from "./schema";
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let queryClient: ReturnType<typeof postgres> | null = null;
 
+export function getDbConfigStatus() {
+  return {
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+    dbClientInitialized: Boolean(queryClient),
+    drizzleInitialized: Boolean(dbInstance),
+  };
+}
+
 export function getQueryClient() {
   if (!queryClient) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      throw new Error("Missing DATABASE_URL in environment for Supabase PostgreSQL.");
+      throw new Error("DATABASE_URL is missing");
     }
     // Setup postgres client
     queryClient = postgres(connectionString, { prepare: false });

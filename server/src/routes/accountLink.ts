@@ -3,7 +3,7 @@ import { AppError } from "../utils/error";
 import { getDb } from "../db";
 import { linkedIdentities, auditLogs } from "../db/schema";
 import { eq, and } from "drizzle-orm";
-import { supabaseAdmin } from "../utils/supabase";
+import { getSupabaseAdmin } from "../utils/supabase";
 import { validateTelegramAuth, type TelegramAuthData } from "../services/telegramAuth";
 import { parseWithSchema } from "../utils/validation";
 import { telegramAuthSchema } from "../validators/auth";
@@ -28,7 +28,7 @@ router.get("/providers", async (req, res, next) => {
     const linked = await db.select().from(linkedIdentities).where(eq(linkedIdentities.userId, req.user.id));
     
     // Also fetch from Supabase native identities
-    const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+    const { data: { user } } = await getSupabaseAdmin().auth.admin.getUserById(req.user.id);
     const nativeIdentities = user?.identities || [];
     
     const providers = [
@@ -118,10 +118,10 @@ router.delete("/providers/:provider", async (req, res, next) => {
         .where(and(eq(linkedIdentities.userId, req.user.id), eq(linkedIdentities.provider, "telegram")));
     } else {
       // Unlink native provider via Supabase Admin API
-      const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+      const { data: { user } } = await getSupabaseAdmin().auth.admin.getUserById(req.user.id);
       const identity = user?.identities?.find(id => id.provider === provider);
       if (identity) {
-        await supabaseAdmin.auth.admin.deleteIdentity(identity.identity_id);
+        await getSupabaseAdmin().auth.admin.deleteIdentity(identity.identity_id);
       }
     }
 

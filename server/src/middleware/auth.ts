@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "../utils/error";
-import { supabaseAdmin } from "../utils/supabase";
+import { getSupabaseAdmin } from "../utils/supabase";
 
 export const getSessionCookieName = () => {
   return "sypev_session_cookie";
@@ -26,7 +26,7 @@ export const authOptional = async (
     const authHeader = req.headers.authorization;
     if (authHeader) {
       const token = authHeader.replace("Bearer ", "");
-      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+      const { data: { user }, error } = await getSupabaseAdmin().auth.getUser(token);
       if (!error && user) {
         req.user = user;
       } else {
@@ -37,7 +37,7 @@ export const authOptional = async (
             if (payload?.provider === "telegram" && payload.sub) {
               const {
                 data: { user: telegramUser },
-              } = await supabaseAdmin.auth.admin.getUserById(payload.sub);
+              } = await getSupabaseAdmin().auth.admin.getUserById(payload.sub);
               if (telegramUser) {
                 req.user = telegramUser;
               }

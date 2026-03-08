@@ -3,10 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 
-import { getDb } from "../db";
+import { getDb, getDbConfigStatus } from "../db";
 import { linkedIdentities, studentProfiles } from "../db/schema";
 import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
-import { supabaseAdmin, supabaseAnon } from "../utils/supabase";
+import { getSupabaseAdmin, getSupabaseAnon, getSupabaseConfigStatus } from "../utils/supabase";
 import { AppError } from "../utils/error";
 import { parseWithSchema } from "../utils/validation";
 import {
@@ -20,6 +20,31 @@ import {
 const router = Router();
 
 const TELEGRAM_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+function formatErrorForLog(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    name: "NonError",
+    message: String(error),
+  };
+}
+
+function logAuthDebug(
+  scope: string,
+  requestId: string,
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  const payload = details ? ` ${JSON.stringify(details)}` : "";
+  console.error(`[auth:${scope}][${requestId}] ${message}${payload}`);
+}
 
 function getTelegramJwtSecret(): string {
   const secret = process.env.APP_AUTH_JWT_SECRET;
@@ -50,7 +75,7 @@ async function resolveSupabaseUserFromBearerToken(authorization?: string) {
   const {
     data: { user },
     error,
-  } = await supabaseAdmin.auth.getUser(token);
+  } = await getSupabaseAdmin().auth.getUser(token);
 
   if (error || !user) {
     return null;
@@ -78,30 +103,102 @@ function signTelegramToken(userId: string, telegramUserId: string): string {
   );
 }
 
-router.get("/check-username", async (req, res) => {
-  const rawUsername = typeof req.query.username === "string" ? req.query.username : "";
-  const normalizedUsername = normalizeUsername(rawUsername);
-  const validation = validateNormalizedUsername(normalizedUsername);
+router.get("/health-auth", async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
 
-  if (!validation.valid) {
+  try {
+    const dbConfig = getDbConfigStatus();
+    const supabaseConfig = getSupabaseConfigStatus();
+
+    logAuthDebug("health-auth", requestId, "infra health requested", {
+      dbConfig,
+      supabaseConfig,
+    });
+
     return res.status(200).json({
       ok: true,
       data: {
-        available: false,
-        valid: false,
-        normalizedUsername: null,
-        error: validation.error,
+        database: dbConfig,
+        supabase: supabaseConfig,
+      },
+    });
+  } catch (error) {
+    logAuthDebug("health-auth", requestId, "health route failed", {
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        database: {
+          hasDatabaseUrl: false,
+          dbClientInitialized: false,
+          drizzleInitialized: false,
+        },
+        supabase: {
+          hasUrl: false,
+          hasAnonKey: false,
+          hasServiceRoleKey: false,
+        },
       },
     });
   }
+});
+
+router.get("/check-username", async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
 
   try {
-    const db = getDb();
-    const existing = await db
-      .select({ userId: studentProfiles.userId })
-      .from(studentProfiles)
-      .where(eq(studentProfiles.username, normalizedUsername))
-      .limit(1);
+    const rawUsername = typeof req.query.username === "string" ? req.query.username : "";
+    const normalizedUsername = normalizeUsername(rawUsername);
+    const validation = validateNormalizedUsername(normalizedUsername);
+
+    logAuthDebug("check-username", requestId, "incoming request", {
+      rawLength: rawUsername.length,
+      hasAt: rawUsername.includes("@"),
+      normalizedLength: normalizedUsername.length,
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
+
+    if (!validation.valid) {
+      return res.status(200).json({
+        ok: true,
+        data: {
+          available: false,
+          valid: false,
+          normalizedUsername: null,
+          error: validation.error,
+        },
+      });
+    }
+
+    let existing: { userId: string }[] = [];
+    try {
+      const db = getDb();
+      existing = await db
+        .select({ userId: studentProfiles.userId })
+        .from(studentProfiles)
+        .where(eq(studentProfiles.username, normalizedUsername))
+        .limit(1);
+      logAuthDebug("check-username", requestId, "db lookup succeeded", {
+        foundCount: existing.length,
+      });
+    } catch (dbError) {
+      logAuthDebug("check-username", requestId, "db lookup failure", {
+        error: formatErrorForLog(dbError),
+        dbConfig: getDbConfigStatus(),
+      });
+      return res.status(200).json({
+        ok: true,
+        data: {
+          available: false,
+          valid: true,
+          normalizedUsername,
+          error: "Username service temporarily unavailable",
+        },
+      });
+    }
 
     return res.status(200).json({
       ok: true,
@@ -112,14 +209,20 @@ router.get("/check-username", async (req, res) => {
         error: null,
       },
     });
-  } catch {
+  } catch (error) {
+    logAuthDebug("check-username", requestId, "route failed", {
+      error: formatErrorForLog(error),
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
+
     return res.status(200).json({
       ok: true,
       data: {
         available: false,
         valid: false,
         normalizedUsername: null,
-        error: "Could not validate username right now",
+        error: "Username service temporarily unavailable",
       },
     });
   }
@@ -178,55 +281,122 @@ router.post("/set-username", async (req, res, next) => {
   }
 });
 
-router.post("/login", async (req, res, next) => {
+router.post("/login", async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+
   try {
     const input = parseWithSchema(loginSchema, req.body);
 
     const identifier = input.identifier.trim();
     const password = input.password;
+    const identifierIsEmail = isEmailIdentifier(identifier);
+
+    logAuthDebug("login", requestId, "incoming request", {
+      identifierIsEmail,
+      identifierLength: identifier.length,
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
 
     let emailForLogin: string;
 
-    if (isEmailIdentifier(identifier)) {
+    if (identifierIsEmail) {
       emailForLogin = identifier.toLowerCase();
     } else {
       const normalizedUsername = normalizeUsername(identifier);
       const validation = validateNormalizedUsername(normalizedUsername);
 
+      logAuthDebug("login", requestId, "identifier treated as username", {
+        normalizedUsernameLength: normalizedUsername.length,
+        usernameValid: validation.valid,
+      });
+
       if (!validation.valid) {
-        throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+        return res.status(401).json({
+          ok: false,
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "Invalid credentials",
+          },
+        });
       }
 
-      const db = getDb();
-      const profile = await db
-        .select({ userId: studentProfiles.userId })
-        .from(studentProfiles)
-        .where(eq(studentProfiles.username, normalizedUsername))
-        .limit(1);
+      let profile;
+      try {
+        const db = getDb();
+        profile = await db
+          .select({ userId: studentProfiles.userId })
+          .from(studentProfiles)
+          .where(eq(studentProfiles.username, normalizedUsername))
+          .limit(1);
+      } catch (dbError) {
+        logAuthDebug("login", requestId, "username lookup db failure", {
+          error: formatErrorForLog(dbError),
+        });
+        return res.status(503).json({
+          ok: false,
+          error: {
+            code: "AUTH_SERVICE_UNAVAILABLE",
+            message: "Login service temporarily unavailable",
+          },
+        });
+      }
 
-      if (profile.length === 0) {
-        throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+      if (!profile || profile.length === 0) {
+        logAuthDebug("login", requestId, "username not found", {
+          normalizedUsername,
+        });
+        return res.status(401).json({
+          ok: false,
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "Invalid credentials",
+          },
+        });
       }
 
       const {
         data: { user },
         error: userLookupError,
-      } = await supabaseAdmin.auth.admin.getUserById(profile[0].userId);
+      } = await getSupabaseAdmin().auth.admin.getUserById(profile[0].userId);
 
       if (userLookupError || !user?.email) {
-        throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+        logAuthDebug("login", requestId, "supabase user lookup failure", {
+          hasUser: Boolean(user),
+          supabaseError: userLookupError?.message ?? null,
+        });
+        return res.status(401).json({
+          ok: false,
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "Invalid credentials",
+          },
+        });
       }
 
       emailForLogin = user.email;
     }
 
-    const { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
-      email: emailForLogin,
-      password,
-    });
+    const { data: authData, error: authError } = await getSupabaseAnon().auth.signInWithPassword(
+      {
+        email: emailForLogin,
+        password,
+      },
+    );
 
     if (authError || !authData.session || !authData.user) {
-      throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+      logAuthDebug("login", requestId, "supabase password auth failure", {
+        hasSession: Boolean(authData?.session),
+        hasUser: Boolean(authData?.user),
+        supabaseError: authError?.message ?? null,
+      });
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: "INVALID_CREDENTIALS",
+          message: "Invalid credentials",
+        },
+      });
     }
 
     return res.json({
@@ -237,7 +407,19 @@ router.post("/login", async (req, res, next) => {
       },
     });
   } catch (error) {
-    next(error);
+    logAuthDebug("login", requestId, "route failed", {
+      error: formatErrorForLog(error),
+      dbConfig: getDbConfigStatus(),
+      supabaseConfig: getSupabaseConfigStatus(),
+    });
+
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "AUTH_SERVICE_UNAVAILABLE",
+        message: "Login service temporarily unavailable",
+      },
+    });
   }
 });
 
@@ -310,7 +492,7 @@ router.post("/telegram", async (req, res, next) => {
       const syntheticEmail = `telegram_${telegramUserId}@users.telegram.local`;
       const generatedPassword = randomBytes(48).toString("hex");
 
-      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      const { data: created, error: createError } = await getSupabaseAdmin().auth.admin.createUser({
         email: syntheticEmail,
         password: generatedPassword,
         email_confirm: true,
@@ -375,7 +557,7 @@ router.get("/me", async (req, res, next) => {
 
     const {
       data: { user: adminUser },
-    } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+    } = await getSupabaseAdmin().auth.admin.getUserById(req.user.id);
 
     const nativeProviders = (adminUser?.identities ?? [])
       .map((identity) => ({
