@@ -28,6 +28,42 @@ export type AuthProvider = {
   linkedAt: number;
   providerEmail?: string;
 };
+
+export type UsernameCheckResponse = {
+  available: boolean;
+  valid: boolean;
+  normalizedUsername: string | null;
+  error: string | null;
+};
+
+export type LoginResponse = {
+  session: {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+    token_type: string;
+    user: {
+      id: string;
+      email: string | null;
+    };
+  };
+  user: {
+    id: string;
+    email: string | null;
+  };
+};
+
+export type TelegramAuthResponse =
+  | {
+      linked: true;
+      provider: "telegram";
+      userId: string;
+    }
+  | {
+      accessToken: string;
+      tokenType: "Bearer";
+      expiresIn: number;
+    };
 export type Profile = {
   userId: string;
   grade: number | null;
@@ -76,14 +112,14 @@ export async function register(payload: {
 }
 
 export async function login(payload: { identifier: string; password: string }) {
-  return apiFetch<User>("/api/auth/login", {
+  return apiFetch<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function telegramAuth(data: Record<string, unknown>) {
-  return apiFetch<User & { isNewUser?: boolean; needsUsername?: boolean }>(
+  return apiFetch<TelegramAuthResponse>(
     "/api/auth/telegram",
     { method: "POST", body: JSON.stringify(data) },
   );
@@ -125,7 +161,7 @@ export async function resetPassword(token: string, password: string) {
 }
 
 export async function checkUsername(username: string) {
-  return apiFetch<{ available: boolean; error?: string }>(
+  return apiFetch<UsernameCheckResponse>(
     `/api/auth/check-username?username=${encodeURIComponent(username)}`,
     {},
     { silent: true },

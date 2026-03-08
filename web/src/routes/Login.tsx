@@ -14,7 +14,7 @@ type AuthTab = "email" | "phone";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { refreshProfile, setSessionManually } = useAuth();
+  const { refreshProfile, setTelegramSession } = useAuth();
   const [tab, setTab] = React.useState<AuthTab>("email");
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -28,7 +28,7 @@ export default function Login() {
       gsap.fromTo(
         ".animate-element",
         { y: 20, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.6, stagger: 0.05, ease: "power2.out" }
+        { y: 0, opacity: 1, duration: 0.6, stagger: 0.05, ease: "power2.out" },
       );
     }
   }, [tab]);
@@ -37,24 +37,22 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      // If it looks like an email, use native Supabase auth
-      if (identifier.includes("@")) {
-        const { error, data } = await supabase.auth.signInWithPassword({
-          email: identifier,
-          password
-        });
-        if (error) throw error;
-        await refreshProfile();
-        navigate("/dashboard");
-      } else {
-        // Otherwise use the backend username resolution proxy
-        const res = await login({ identifier, password });
-        // Set the session returned from our backend
-        if ((res as any).session) {
-          await setSessionManually((res as any).session.access_token, (res as any).session.refresh_token);
-        }
-        navigate("/dashboard");
+      const response = await login({
+        identifier: identifier.trim(),
+        password,
+      });
+
+      const { error } = await supabase.auth.setSession({
+        access_token: response.session.access_token,
+        refresh_token: response.session.refresh_token,
+      });
+
+      if (error) {
+        throw error;
       }
+
+      await refreshProfile();
+      navigate("/dashboard");
     } catch (err: any) {
       toast.error(err.message || "Login failed");
     } finally {
@@ -64,41 +62,44 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      // Supabase strictly checks the exact redirect URL against its whitelist.
-      const redirectUrl = import.meta.env.VITE_WEBSITE_URL 
-        ? `${import.meta.env.VITE_WEBSITE_URL}/dashboard`
-        : `${window.location.origin}/dashboard`;
-        
+      const redirectUrl = `${window.location.origin}/dashboard`;
+
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
-          redirectTo: redirectUrl
-        }
+          redirectTo: redirectUrl,
+        },
       });
-      if (error) throw error;
+
+      if (error) {
+        throw error;
+      }
     } catch (err: any) {
       toast.error(err.message || "Google login failed");
     }
   };
 
-  // Telegram Login Widget callback
   React.useEffect(() => {
-    (window as any).onTelegramAuth = async (user: Record<string, unknown>) => {
+    (window as Window & { onTelegramAuth?: (user: Record<string, unknown>) => Promise<void> }).onTelegramAuth = async (
+      user: Record<string, unknown>,
+    ) => {
       try {
         const res = await telegramAuth(user);
-        if ((res as any).session) {
-          await setSessionManually((res as any).session.access_token, (res as any).session.refresh_token);
+        if ("accessToken" in res) {
+          await setTelegramSession(res.accessToken);
+          navigate("/dashboard");
+          return;
         }
-        navigate("/dashboard");
+
+        toast.error("Telegram login response is invalid");
       } catch (err: any) {
         toast.error(err?.message || "Telegram login failed");
       }
     };
-  }, [setSessionManually, navigate]);
+  }, [setTelegramSession, navigate]);
 
-  // Load Telegram widget
   React.useEffect(() => {
-    const botUsername = (window as any).__TELEGRAM_BOT_USERNAME || "SypevBot";
+    const botUsername = (window as Window & { __TELEGRAM_BOT_USERNAME?: string }).__TELEGRAM_BOT_USERNAME || "SypevBot";
     if (!botUsername) return;
 
     const script = document.createElement("script");
@@ -129,15 +130,15 @@ export default function Login() {
               <Command className="w-8 h-8 text-primary" />
               <span className="text-2xl font-bold tracking-tight">Test_Bro</span>
             </div>
-            
+
             <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6">
-              Welcome back to your <br/>
+              Welcome back to your <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60">
                 master plan.
               </span>
             </h1>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
-              Supabase Auth enabled. Access your personalized study schedule, university shortlist, and track your progress in one beautifully designed space.
+              Sign in with email/password, username/password, Google, or Telegram and continue your admissions workflow.
             </p>
           </div>
         </div>
@@ -146,9 +147,7 @@ export default function Login() {
           <div className="w-full max-w-md glass-panel p-8 sm:p-10 rounded-[2rem]">
             <div className="mb-8 animate-element">
               <h2 className="text-3xl font-bold tracking-tight mb-2">Sign in</h2>
-              <p className="text-muted-foreground text-sm">
-                Enter your details to access your account.
-              </p>
+              <p className="text-muted-foreground text-sm">Enter your details to access your account.</p>
             </div>
 
             <div ref={formRef} className="space-y-6">
@@ -183,17 +182,14 @@ export default function Login() {
                       type="text"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="name@example.com"
+                      placeholder="name@example.com or username"
                       required
                     />
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-foreground/80 font-medium">Password</Label>
-                      <Link
-                        className="text-xs font-semibold text-primary hover:underline"
-                        to="/forgot-password"
-                      >
+                      <Link className="text-xs font-semibold text-primary hover:underline" to="/forgot-password">
                         Forgot password?
                       </Link>
                     </div>
@@ -217,23 +213,21 @@ export default function Login() {
                   <div className="w-full border-t border-border/60" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase font-semibold">
-                  <span className="bg-background/80 backdrop-blur-md px-3 text-muted-foreground rounded-full">
-                    Or continue with
-                  </span>
+                  <span className="bg-background/80 backdrop-blur-md px-3 text-muted-foreground rounded-full">Or continue with</span>
                 </div>
               </div>
 
               <div className="space-y-3 animate-element flex flex-col items-center">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   className="w-full h-12 flex items-center justify-center gap-2"
                   onClick={handleGoogleLogin}
                 >
                   <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.25033 6.60998L5.31033 9.76C6.27533 6.81 9.07033 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5649 4.88501 12.7949 4.88501 11.9949C4.88501 11.1949 5.01998 10.4249 5.26498 9.6949L1.275 6.65486C0.46 8.22986 0 10.0549 0 11.9949C0 13.9349 0.46 15.7599 1.28 17.3349L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24C15.2404 24 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C9.07041 19.245 6.27541 17.185 5.31041 14.235L1.25043 17.385C3.25543 21.305 7.31041 24 12.0004 24Z" fill="#34A853"/></svg>
                   Continue with Google
                 </Button>
-                
+
                 <div
                   id="telegram-login-container"
                   className="flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow w-full"

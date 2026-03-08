@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+export const USERNAME_MIN_LENGTH = 3;
+export const USERNAME_MAX_LENGTH = 30;
+export const USERNAME_REGEX = /^[a-z0-9_]+$/;
+
+export function normalizeUsername(input: string): string {
+  return input.trim().toLowerCase();
+}
+
+export function validateNormalizedUsername(username: string): {
+  valid: boolean;
+  error: string | null;
+} {
+  if (username.length < USERNAME_MIN_LENGTH || username.length > USERNAME_MAX_LENGTH) {
+    return {
+      valid: false,
+      error: `Username must be between ${USERNAME_MIN_LENGTH} and ${USERNAME_MAX_LENGTH} characters`,
+    };
+  }
+
+  if (!USERNAME_REGEX.test(username)) {
+    return {
+      valid: false,
+      error: "Username may contain only letters, numbers, and underscores",
+    };
+  }
+
+  return { valid: true, error: null };
+}
+
 // ── Email Auth ────────────────────────────────────────────────────────────────
 export const registerSchema = z.object({
   email: z.string().email("Invalid email format").max(320),
@@ -11,7 +40,7 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  identifier: z.string().min(3, "Username or email is required").max(320),
+  identifier: z.string().trim().min(3, "Username or email is required").max(320),
   password: z.string().min(1, "Password is required").max(128),
 });
 
@@ -43,14 +72,7 @@ export const phoneOtpVerifySchema = z.object({
 
 // ── Username ──────────────────────────────────────────────────────────────────
 export const usernameSchema = z.object({
-  username: z
-    .string()
-    .min(3, "Username must be at least 3 characters")
-    .max(30, "Username must be at most 30 characters")
-    .regex(
-      /^[a-zA-Z][a-zA-Z0-9_]{2,29}$/,
-      "Username must start with a letter and contain only letters, numbers, and underscores",
-    ),
+  username: z.string().min(USERNAME_MIN_LENGTH).max(USERNAME_MAX_LENGTH),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")

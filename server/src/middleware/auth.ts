@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 import { AppError } from "../utils/error";
 import { supabaseAdmin } from "../utils/supabase";
 
@@ -28,6 +29,23 @@ export const authOptional = async (
       const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
       if (!error && user) {
         req.user = user;
+      } else {
+        const customSecret = process.env.APP_AUTH_JWT_SECRET;
+        if (customSecret) {
+          try {
+            const payload = jwt.verify(token, customSecret) as { sub?: string; provider?: string };
+            if (payload?.provider === "telegram" && payload.sub) {
+              const {
+                data: { user: telegramUser },
+              } = await supabaseAdmin.auth.admin.getUserById(payload.sub);
+              if (telegramUser) {
+                req.user = telegramUser;
+              }
+            }
+          } catch {
+            // Ignore invalid custom token and continue as unauthenticated.
+          }
+        }
       }
     }
     next();

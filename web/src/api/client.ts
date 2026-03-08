@@ -8,6 +8,19 @@ export type ApiError = {
 };
 
 const BASE_URL = import.meta.env.VITE_API_URL || "";
+export const CUSTOM_AUTH_TOKEN_KEY = "test_bro_custom_access_token";
+
+export function getCustomAccessToken(): string | null {
+  return localStorage.getItem(CUSTOM_AUTH_TOKEN_KEY);
+}
+
+export function setCustomAccessToken(token: string) {
+  localStorage.setItem(CUSTOM_AUTH_TOKEN_KEY, token);
+}
+
+export function clearCustomAccessToken() {
+  localStorage.removeItem(CUSTOM_AUTH_TOKEN_KEY);
+}
 
 export async function apiFetch<T>(
   path: string,
@@ -15,11 +28,14 @@ export async function apiFetch<T>(
   config: { silent?: boolean } = {}
 ): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
+  const customToken = getCustomAccessToken();
   
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
   if (session?.access_token) {
     headers.set("Authorization", `Bearer ${session.access_token}`);
+  } else if (customToken) {
+    headers.set("Authorization", `Bearer ${customToken}`);
   }
 
   const fullUrl = path.startsWith("http") ? path : `${BASE_URL}${path}`;

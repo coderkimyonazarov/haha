@@ -29,6 +29,10 @@ export const linkedIdentities = pgTable(
       table.provider,
       table.providerUserId
     ),
+    userProviderUniqueIdx: uniqueIndex("linked_identities_user_provider_uid").on(
+      table.userId,
+      table.provider
+    ),
     userIdIdx: index("linked_identities_user_id_idx").on(table.userId),
   })
 );

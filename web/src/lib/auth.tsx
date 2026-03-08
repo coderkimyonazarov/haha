@@ -1,9 +1,11 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from "react";
 import { User as SupabaseUser, Session } from "@supabase/supabase-js";
+
 import { supabase } from "./supabase";
 import * as api from "../api";
 import { User as AppUser, UserPreferences } from "../api";
 import { applyTheme } from "./theme";
+import { clearCustomAccessToken, getCustomAccessToken, setCustomAccessToken } from "../api/client";
 
 interface AuthState {
   user: AppUser | null;
@@ -21,42 +23,54 @@ interface AuthContextValue extends AuthState {
   refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
   logout: () => Promise<void>;
-  setSessionManually: (accessToken: string, refreshToken: string) => Promise<void>;
+  setTelegramSession: (accessToken: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    session: null,
-    profile: null,
-    loading: true,
-    needsUsername: false,
-    preferences: null,
-    providers: [],
-  });
+const initialState: AuthState = {
+  user: null,
+  session: null,
+  profile: null,
+  loading: true,
+  needsUsername: false,
+  preferences: null,
+  providers: [],
+};
 
-  const fetchProfileData = async (sessionUser: SupabaseUser | null) => {
-    if (!sessionUser) {
-      setState((s) => ({ ...s, user: null, session: null, profile: null, loading: false }));
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<AuthState>(initialState);
+
+  const fetchProfileData = async (sessionUser: SupabaseUser | null, hasCustomToken: boolean) => {
+    if (!sessionUser && !hasCustomToken) {
+      setState((s) => ({
+        ...s,
+        user: null,
+        session: null,
+        profile: null,
+        needsUsername: false,
+        preferences: null,
+        providers: [],
+        loading: false,
+      }));
       return;
     }
-    
+
     try {
       const data = await api.me();
       if (data && data.user) {
         if (data.preferences) {
           applyTheme({
             ...data.preferences,
-            onboardingDone: Boolean(data.preferences.onboardingDone) // Convert number 0/1 to boolean
+            onboardingDone: Boolean(data.preferences.onboardingDone),
           });
         }
+
         setState((s) => ({
           ...s,
           user: data.user,
           profile: data.profile,
-          needsUsername: data.user.needsUsername || false,
+          needsUsername: Boolean(data.user.needsUsername),
           preferences: data.preferences || null,
           providers: data.providers || [],
           loading: false,
@@ -64,25 +78,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setState((s) => ({ ...s, user: null, loading: false }));
       }
-    } catch (error) {
-      setState((s) => ({ ...s, user: null, loading: false }));
+    } catch {
+      setState((s) => ({
+        ...s,
+        user: null,
+        profile: null,
+        needsUsername: false,
+        preferences: null,
+        providers: [],
+        loading: false,
+      }));
     }
   };
 
   useEffect(() => {
-    // Initial fetch
     supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
+      const hasCustomToken = Boolean(getCustomAccessToken());
+
+      if (session?.access_token) {
+        clearCustomAccessToken();
+      }
+
       setState((s) => ({ ...s, session }));
-      fetchProfileData(session?.user || null);
+      fetchProfileData(session?.user ?? null, hasCustomToken);
     });
 
-    // Listen to changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event: any, session: Session | null) => {
-        setState((s) => ({ ...s, session, loading: true }));
-        fetchProfileData(session?.user || null);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
+      if (session?.access_token) {
+        clearCustomAccessToken();
       }
-    );
+
+      setState((s) => ({ ...s, session, loading: true }));
+      fetchProfileData(session?.user ?? null, Boolean(getCustomAccessToken()));
+    });
 
     return () => {
       subscription.unsubscribe();
@@ -90,43 +120,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshProfile = async () => {
-    await fetchProfileData(state.session?.user || null);
+    await fetchProfileData(state.session?.user ?? null, Boolean(getCustomAccessToken()));
   };
 
   const signOut = async () => {
-    await api.logout().catch(() => {}); // Clear backend sypev cookies if any left
+    await api.logout().catch(() => {
+      // Ignore backend logout errors and continue local sign out.
+    });
+
+    clearCustomAccessToken();
     await supabase.auth.signOut();
+
     setState({
-      user: null,
-      session: null,
-      profile: null,
+      ...initialState,
       loading: false,
-      needsUsername: false,
-      preferences: null,
-      providers: [],
     });
   };
 
-  const setSessionManually = async (access_token: string, refresh_token: string) => {
-    const { data, error } = await supabase.auth.setSession({
-      access_token,
-      refresh_token,
-    });
-    if (error) throw error;
-    setState((s) => ({ ...s, session: data.session, loading: true }));
-    fetchProfileData(data.session?.user || null);
+  const setTelegramSession = async (accessToken: string) => {
+    setCustomAccessToken(accessToken);
+    setState((s) => ({ ...s, session: null, loading: true }));
+    await fetchProfileData(null, true);
   };
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        ...state, 
-        refreshProfile, 
-        refresh: refreshProfile, 
-        refreshUser: refreshProfile, 
-        signOut, 
-        logout: signOut, 
-        setSessionManually 
+    <AuthContext.Provider
+      value={{
+        ...state,
+        refreshProfile,
+        refresh: refreshProfile,
+        refreshUser: refreshProfile,
+        signOut,
+        logout: signOut,
+        setTelegramSession,
       }}
     >
       {children}

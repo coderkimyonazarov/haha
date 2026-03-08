@@ -1,288 +1,429 @@
-import { Router } from "express";
-import { eq } from "drizzle-orm";
-import jwt from "jsonwebtoken";
-import { getDb } from "../db";
-import { studentProfiles, linkedIdentities } from "../db/schema";
-import { supabaseAdmin } from "../utils/supabase";
-import { AppError } from "../utils/error";
-import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
 import { randomBytes } from "crypto";
+import { and, eq } from "drizzle-orm";
+import { Router } from "express";
+import jwt from "jsonwebtoken";
+
+import { getDb } from "../db";
+import { linkedIdentities, studentProfiles } from "../db/schema";
+import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
+import { supabaseAdmin, supabaseAnon } from "../utils/supabase";
+import { AppError } from "../utils/error";
+import { parseWithSchema } from "../utils/validation";
+import {
+  loginSchema,
+  telegramAuthSchema,
+  usernameSchema,
+  normalizeUsername,
+  validateNormalizedUsername,
+} from "../validators/auth";
 
 const router = Router();
 
-// Used for minting our own JWTs for custom providers (like Telegram) that Supabase doesn't natively support
-const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "super-secret-jwt-key-for-supabase-change-in-prod";
+const TELEGRAM_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-function getClientIp(req: any): string {
-  return (
-    req.headers["x-forwarded-for"]?.toString()?.split(",")[0]?.trim() ||
-    req.socket?.remoteAddress ||
-    ""
+function getTelegramJwtSecret(): string {
+  const secret = process.env.APP_AUTH_JWT_SECRET;
+  if (!secret) {
+    throw new AppError(
+      "CONFIG_ERROR",
+      "APP_AUTH_JWT_SECRET is required for Telegram custom auth tokens",
+      500,
+    );
+  }
+  return secret;
+}
+
+function isEmailIdentifier(identifier: string): boolean {
+  return /^\S+@\S+\.\S+$/.test(identifier);
+}
+
+async function resolveSupabaseUserFromBearerToken(authorization?: string) {
+  if (!authorization?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authorization.slice("Bearer ".length).trim();
+  if (!token) {
+    return null;
+  }
+
+  const {
+    data: { user },
+    error,
+  } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !user) {
+    return null;
+  }
+
+  return user;
+}
+
+function signTelegramToken(userId: string, telegramUserId: string): string {
+  const secret = getTelegramJwtSecret();
+
+  return jwt.sign(
+    {
+      iss: "test_bro_api",
+      aud: "test_bro_telegram",
+      sub: userId,
+      provider: "telegram",
+      telegram_user_id: telegramUserId,
+    },
+    secret,
+    {
+      algorithm: "HS256",
+      expiresIn: TELEGRAM_TOKEN_TTL_SECONDS,
+    },
   );
 }
 
-// ── Set Username ───────────────────────────────────────────────────────────
-// This is called by the frontend immediately after a successful Supabase native login/signup
+router.get("/check-username", async (req, res) => {
+  const rawUsername = typeof req.query.username === "string" ? req.query.username : "";
+  const normalizedUsername = normalizeUsername(rawUsername);
+  const validation = validateNormalizedUsername(normalizedUsername);
+
+  if (!validation.valid) {
+    return res.status(200).json({
+      ok: true,
+      data: {
+        available: false,
+        valid: false,
+        normalizedUsername: null,
+        error: validation.error,
+      },
+    });
+  }
+
+  try {
+    const db = getDb();
+    const existing = await db
+      .select({ userId: studentProfiles.userId })
+      .from(studentProfiles)
+      .where(eq(studentProfiles.username, normalizedUsername))
+      .limit(1);
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        available: existing.length === 0,
+        valid: true,
+        normalizedUsername,
+        error: null,
+      },
+    });
+  } catch {
+    return res.status(200).json({
+      ok: true,
+      data: {
+        available: false,
+        valid: false,
+        normalizedUsername: null,
+        error: "Could not validate username right now",
+      },
+    });
+  }
+});
+
 router.post("/set-username", async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) throw new AppError("UNAUTHORIZED", "Missing Auth Token", 401);
+    const input = parseWithSchema(usernameSchema, req.body);
+    const user = await resolveSupabaseUserFromBearerToken(req.headers.authorization);
 
-    const token = authHeader.replace("Bearer ", "");
-    // Verify token with Supabase directly
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) throw new AppError("UNAUTHORIZED", "Invalid Supabase Token", 401);
+    if (!user) {
+      throw new AppError("UNAUTHORIZED", "Missing or invalid auth token", 401);
+    }
 
-    const { username } = req.body;
-    if (!username) throw new AppError("INVALID_INPUT", "Username is required", 400);
+    const normalizedUsername = normalizeUsername(input.username);
+    const validation = validateNormalizedUsername(normalizedUsername);
+
+    if (!validation.valid) {
+      throw new AppError("INVALID_INPUT", validation.error ?? "Invalid username", 400);
+    }
 
     const db = getDb();
-    
-    // Check if username is taken
-    const existing = await db.select().from(studentProfiles).where(eq(studentProfiles.username, username));
+
+    const existing = await db
+      .select({ userId: studentProfiles.userId })
+      .from(studentProfiles)
+      .where(eq(studentProfiles.username, normalizedUsername))
+      .limit(1);
+
     if (existing.length > 0 && existing[0].userId !== user.id) {
       throw new AppError("USERNAME_TAKEN", "This username is already taken", 409);
     }
 
-    // Upsert student profile with the new username
-    await db.insert(studentProfiles).values({
-      userId: user.id,
-      username: username,
-    }).onConflictDoUpdate({
-      target: studentProfiles.userId,
-      set: { username, updatedAt: new Date() }
-    });
+    await db
+      .insert(studentProfiles)
+      .values({
+        userId: user.id,
+        username: normalizedUsername,
+      })
+      .onConflictDoUpdate({
+        target: studentProfiles.userId,
+        set: {
+          username: normalizedUsername,
+          updatedAt: new Date(),
+        },
+      });
 
-    res.json({ ok: true, data: { username } });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ── Check Username Availability ───────────────────────────────────────────────
-router.get("/check-username", async (req, res, next) => {
-  try {
-    const username = (req.query.username as string) || "";
-    if (username.length < 3) return res.json({ ok: true, data: { available: false, error: "Too short" } });
-
-    const db = getDb();
-    const existing = await db
-      .select()
-      .from(studentProfiles)
-      .where(eq(studentProfiles.username, username))
-      .limit(1);
-    
-    res.json({ ok: true, data: { available: existing.length === 0 } });
-  } catch (error: any) {
-    console.error("Error checking username availability:", error);
-    // Return a structured error rather than just 500 if possible
-    res.status(500).json({ 
-      ok: false, 
-      error: { 
-        code: "CHECK_USERNAME_FAILED", 
-        message: "Failed to verify username availability. Please try again later."
-      } 
-    });
-  }
-});
-
-// ── Username Login Proxy ───────────────────────────────────────────────────────
-// Because Supabase doesn't natively support "username/password" login natively, we resolve the username
-// to an email, and let the frontend do the actual Supabase signInWithPassword, or we do it here.
-router.post("/login-username", async (req, res, next) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) throw new AppError("INVALID_INPUT", "Username and password required", 400);
-
-    const db = getDb();
-    const profile = await db.select().from(studentProfiles).where(eq(studentProfiles.username, username));
-    if (profile.length === 0) {
-      throw new AppError("INVALID_CREDENTIALS", "Invalid username or password", 401);
-    }
-
-    const userId = profile[0].userId;
-    // Fetch user from Supabase Admin to get the target email
-    const { data: { user }, error } = await supabaseAdmin.auth.admin.getUserById(userId);
-    
-    if (error || !user || !user.email) {
-      throw new AppError("INVALID_CREDENTIALS", "User does not have an attached email", 401);
-    }
-
-    // Instead of doing the login here and having cookie persistence issues, we can securely return the email
-    // back to the frontend ONLY IF we verified auth? No, that exposes user emails.
-    // Better: We perform signInWithPassword on the backend and return the Supabase session!
-    const { data: sessionData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
-      email: user.email,
-      password: password,
-    });
-
-    if (signInError || !sessionData.session) {
-      throw new AppError("INVALID_CREDENTIALS", "Invalid username or password", 401);
-    }
-
-    res.json({
+    return res.json({
       ok: true,
       data: {
-        session: sessionData.session,
-        user: sessionData.user,
-      }
+        username: normalizedUsername,
+      },
     });
-
   } catch (error) {
     next(error);
   }
 });
 
-// ── Telegram Auth & Linking Proxy ───────────────────────────────────────────────
+router.post("/login", async (req, res, next) => {
+  try {
+    const input = parseWithSchema(loginSchema, req.body);
+
+    const identifier = input.identifier.trim();
+    const password = input.password;
+
+    let emailForLogin: string;
+
+    if (isEmailIdentifier(identifier)) {
+      emailForLogin = identifier.toLowerCase();
+    } else {
+      const normalizedUsername = normalizeUsername(identifier);
+      const validation = validateNormalizedUsername(normalizedUsername);
+
+      if (!validation.valid) {
+        throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+      }
+
+      const db = getDb();
+      const profile = await db
+        .select({ userId: studentProfiles.userId })
+        .from(studentProfiles)
+        .where(eq(studentProfiles.username, normalizedUsername))
+        .limit(1);
+
+      if (profile.length === 0) {
+        throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+      }
+
+      const {
+        data: { user },
+        error: userLookupError,
+      } = await supabaseAdmin.auth.admin.getUserById(profile[0].userId);
+
+      if (userLookupError || !user?.email) {
+        throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+      }
+
+      emailForLogin = user.email;
+    }
+
+    const { data: authData, error: authError } = await supabaseAnon.auth.signInWithPassword({
+      email: emailForLogin,
+      password,
+    });
+
+    if (authError || !authData.session || !authData.user) {
+      throw new AppError("INVALID_CREDENTIALS", "Invalid credentials", 401);
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        session: authData.session,
+        user: authData.user,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post("/telegram", async (req, res, next) => {
   try {
-    const authData = req.body as TelegramAuthData;
+    const input = parseWithSchema(telegramAuthSchema, req.body) as TelegramAuthData;
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!botToken) throw new AppError("CONFIG_ERROR", "Telegram bot token missing", 500);
 
-    const isValid = validateTelegramAuth(authData, botToken);
-    if (!isValid) throw new AppError("INVALID_AUTH", "Invalid Telegram signature", 401);
-
-    const providerUserId = String(authData.id);
-    const db = getDb();
-    
-    // Check if identity exists
-    let identity = await db.select().from(linkedIdentities)
-      .where(eq(linkedIdentities.providerUserId, providerUserId));
-
-    let targetUserId = "";
-
-    if (identity.length > 0) {
-      targetUserId = identity[0].userId;
-    } else {
-      // If the user sent a Bearer token, they are LINKING their account
-      const authHeader = req.headers.authorization;
-      if (authHeader) {
-        const token = authHeader.replace("Bearer ", "");
-        const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-        if (user) {
-          targetUserId = user.id;
-          // Create link
-          await db.insert(linkedIdentities).values({
-            userId: targetUserId,
-            provider: "telegram",
-            providerUserId: providerUserId,
-          });
-        }
-      }
-      
-      // If STILL no targetUserId, it means they are doing a fresh LOGIN via Telegram,
-      // We must create a dummy Supabase user to represent this Telegram identity natively.
-      if (!targetUserId) {
-        const dummyEmail = `telegram_${providerUserId}@sypev-dummy.local`;
-        const dummyPassword = randomBytes(16).toString("hex");
-        
-        const { data: { user }, error } = await supabaseAdmin.auth.admin.createUser({
-          email: dummyEmail,
-          password: dummyPassword,
-          email_confirm: true,
-          user_metadata: {
-            name: getTelegramDisplayName(authData),
-            provider: "telegram"
-          }
-        });
-
-        if (error || !user) throw new AppError("CREATE_FAILED", "Could not create Telegram mapped identity", 500);
-        targetUserId = user.id;
-
-        await db.insert(linkedIdentities).values({
-          userId: targetUserId,
-          provider: "telegram",
-          providerUserId: providerUserId,
-        });
-      }
+    if (!botToken) {
+      throw new AppError("CONFIG_ERROR", "TELEGRAM_BOT_TOKEN is missing", 500);
     }
 
-    // Now we have the targetUserId. We generate a custom JWT using Supabase JWT Secret
-    // so the frontend can interface with RLS and our DB as if they were natively logged in.
-    const customJwtPayload = {
-      aud: "authenticated",
-      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 7), // 1 week
-      sub: targetUserId,
-      email: `telegram_${providerUserId}@sypev-dummy.local`,
-      role: "authenticated",
-      app_metadata: {
-        provider: "telegram",
-        providers: ["telegram"]
+    if (!validateTelegramAuth(input, botToken)) {
+      throw new AppError("INVALID_AUTH", "Invalid Telegram auth signature", 401);
+    }
+
+    const db = getDb();
+    const telegramUserId = String(input.id);
+
+    const sessionUser = await resolveSupabaseUserFromBearerToken(req.headers.authorization);
+
+    if (sessionUser) {
+      const existingProviderLink = await db
+        .select({ id: linkedIdentities.id })
+        .from(linkedIdentities)
+        .where(
+          and(
+            eq(linkedIdentities.provider, "telegram"),
+            eq(linkedIdentities.providerUserId, telegramUserId),
+          ),
+        )
+        .limit(1);
+
+      if (existingProviderLink.length > 0) {
+        throw new AppError("PROVIDER_CONFLICT", "Telegram account is already linked", 409);
       }
-    };
-    
-    const token = jwt.sign(customJwtPayload, SUPABASE_JWT_SECRET);
-    
-    res.json({
+
+      await db.insert(linkedIdentities).values({
+        userId: sessionUser.id,
+        provider: "telegram",
+        providerUserId: telegramUserId,
+      });
+
+      return res.json({
+        ok: true,
+        data: {
+          linked: true,
+          provider: "telegram",
+          userId: sessionUser.id,
+        },
+      });
+    }
+
+    const existingLink = await db
+      .select({ userId: linkedIdentities.userId })
+      .from(linkedIdentities)
+      .where(
+        and(
+          eq(linkedIdentities.provider, "telegram"),
+          eq(linkedIdentities.providerUserId, telegramUserId),
+        ),
+      )
+      .limit(1);
+
+    let userId: string;
+
+    if (existingLink.length > 0) {
+      userId = existingLink[0].userId;
+    } else {
+      const syntheticEmail = `telegram_${telegramUserId}@users.telegram.local`;
+      const generatedPassword = randomBytes(48).toString("hex");
+
+      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email: syntheticEmail,
+        password: generatedPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: getTelegramDisplayName(input),
+          telegram_username: input.username ?? null,
+          signup_provider: "telegram",
+        },
+      });
+
+      if (createError || !created.user) {
+        throw new AppError("CREATE_FAILED", "Failed to create Telegram account", 500);
+      }
+
+      userId = created.user.id;
+
+      await db.insert(linkedIdentities).values({
+        userId,
+        provider: "telegram",
+        providerUserId: telegramUserId,
+      });
+
+      await db
+        .insert(studentProfiles)
+        .values({ userId })
+        .onConflictDoNothing({ target: studentProfiles.userId });
+    }
+
+    const accessToken = signTelegramToken(userId, telegramUserId);
+
+    return res.json({
       ok: true,
       data: {
-        session: {
-          access_token: token,
-          refresh_token: token, // Dummy refresh token
-          expires_in: 60 * 60 * 24 * 7,
-          user: { id: targetUserId }
-        }
-      }
+        accessToken,
+        tokenType: "Bearer",
+        expiresIn: TELEGRAM_TOKEN_TTL_SECONDS,
+      },
     });
-
   } catch (error) {
     next(error);
   }
 });
 
-// ── Me (Profile Data Resolver) ───────────────────────────────────────────────
 router.get("/me", async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.json({ ok: true, data: { user: null } });
-
-    const token = authHeader.replace("Bearer ", "");
-    
-    // Validate with Supabase OR jsonwebtoken (if it's our dummy Telegram token)
-    let userRecord = null;
-    
-    try {
-      // First try native Supabase
-      const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-      if (!error && user) {
-        userRecord = user;
-      } else {
-        // Fallback: Custom dummy JWT validation (Telegram)
-        const payload = jwt.verify(token, SUPABASE_JWT_SECRET) as any;
-        if (payload && payload.sub) {
-          const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(payload.sub);
-          userRecord = user;
-        }
-      }
-    } catch(e) { /* invalid token */ }
-
-    if (!userRecord) return res.json({ ok: true, data: { user: null } });
+    if (!req.user) {
+      return res.json({ ok: true, data: { user: null } });
+    }
 
     const db = getDb();
-    
-    const profile = await db.select().from(studentProfiles).where(eq(studentProfiles.userId, userRecord.id));
-    const linked = await db.select().from(linkedIdentities).where(eq(linkedIdentities.userId, userRecord.id));
 
-    res.json({
+    const profileRows = await db
+      .select()
+      .from(studentProfiles)
+      .where(eq(studentProfiles.userId, req.user.id))
+      .limit(1);
+
+    const providerRows = await db
+      .select({ provider: linkedIdentities.provider, linkedAt: linkedIdentities.linkedAt })
+      .from(linkedIdentities)
+      .where(eq(linkedIdentities.userId, req.user.id));
+
+    const {
+      data: { user: adminUser },
+    } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+
+    const nativeProviders = (adminUser?.identities ?? [])
+      .map((identity) => ({
+        provider: identity.provider,
+        linkedAt: identity.created_at ? new Date(identity.created_at).getTime() : Date.now(),
+      }))
+      .filter((item): item is { provider: string; linkedAt: number } => Boolean(item.provider));
+
+    const providersMap = new Map<string, number>();
+
+    for (const provider of nativeProviders) {
+      providersMap.set(provider.provider, provider.linkedAt);
+    }
+
+    for (const row of providerRows) {
+      providersMap.set(row.provider, new Date(row.linkedAt).getTime());
+    }
+
+    const profile = profileRows[0] ?? null;
+
+    return res.json({
       ok: true,
       data: {
         user: {
-          id: userRecord.id,
-          email: userRecord.email,
-          name: userRecord.user_metadata?.name || "User",
-          username: profile[0]?.username || null,
-          needsUsername: !profile[0]?.username,
+          id: req.user.id,
+          email: req.user.email ?? null,
+          username: profile?.username ?? null,
+          name: (req.user.user_metadata?.name as string | undefined) ?? "User",
+          isAdmin: 0,
+          isVerified: req.user.email_confirmed_at ? 1 : 0,
+          needsUsername: !profile?.username,
         },
-        profile: profile[0],
-        providers: linked.map(l => ({ provider: l.provider, linkedAt: l.linkedAt }))
-      }
+        profile,
+        providers: Array.from(providersMap.entries()).map(([provider, linkedAt]) => ({
+          provider,
+          linkedAt,
+        })),
+      },
     });
-  } catch(error) {
+  } catch (error) {
     next(error);
   }
 });
-// ── Admin Native Fallback ─────────────────────────────────────────────────────────
+
+router.post("/logout", async (_req, res) => {
+  return res.json({ ok: true, data: { loggedOut: true } });
+});
+
 router.post("/admin-login", async (req, res, next) => {
   try {
     const { username, password } = req.body;
@@ -305,7 +446,7 @@ router.post("/admin-login", async (req, res, next) => {
   }
 });
 
-router.post("/admin-logout", async (req, res, next) => {
+router.post("/admin-logout", async (_req, res, next) => {
   try {
     res.clearCookie("sypev_admin", {
       httpOnly: true,
@@ -320,7 +461,7 @@ router.post("/admin-logout", async (req, res, next) => {
 
 router.get("/admin-me", async (req, res, next) => {
   try {
-    const adminCookie = req.cookies?.["sypev_admin"];
+    const adminCookie = req.cookies?.sypev_admin;
     if (adminCookie) {
       return res.json({ ok: true, data: { admin: true } });
     }

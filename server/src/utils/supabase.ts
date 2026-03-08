@@ -1,13 +1,29 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY! Auth functions will crash.");
+if (!supabaseUrl) {
+  throw new Error("Missing SUPABASE_URL.");
+}
+
+if (!supabaseAnonKey) {
+  throw new Error("Missing SUPABASE_ANON_KEY.");
+}
+
+if (!supabaseServiceKey) {
+  throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
 }
 
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+});
+
+export const supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
