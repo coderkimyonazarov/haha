@@ -66,11 +66,23 @@ router.get("/check-username", async (req, res, next) => {
     if (username.length < 3) return res.json({ ok: true, data: { available: false, error: "Too short" } });
 
     const db = getDb();
-    const existing = await db.select().from(studentProfiles).where(eq(studentProfiles.username, username));
+    const existing = await db
+      .select()
+      .from(studentProfiles)
+      .where(eq(studentProfiles.username, username))
+      .limit(1);
     
     res.json({ ok: true, data: { available: existing.length === 0 } });
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    console.error("Error checking username availability:", error);
+    // Return a structured error rather than just 500 if possible
+    res.status(500).json({ 
+      ok: false, 
+      error: { 
+        code: "CHECK_USERNAME_FAILED", 
+        message: "Failed to verify username availability. Please try again later."
+      } 
+    });
   }
 });
 

@@ -27,9 +27,14 @@ export function getDb() {
 
 export type Db = ReturnType<typeof getDb>;
 
-export function ensureSchema() {
-  // We no longer run manual migrations dynamically in the server startup
-  // because Vercel Serverless Functions should not handle heavy DDL migrations.
-  // We rely on 'drizzle-kit push' or standard migration scripts instead.
-  console.log("Supabase PostgreSQL connection ready. Skipping dynamic SQLite ensureSchema.");
+export async function ensureSchema() {
+  try {
+    const client = getQueryClient();
+    // Simple query to verify connection
+    await client`SELECT 1`;
+    console.log("Supabase PostgreSQL connection verified.");
+  } catch (error) {
+    console.error("Failed to connect to Supabase PostgreSQL:", error);
+    // We don't exit here to allow the app to potentially recover or show specific errors
+  }
 }

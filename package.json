@@ -15,10 +15,12 @@
     "test": "npm --workspace server run test"
   },
   "dependencies": {
+    "jsonwebtoken": "^9.0.3",
     "postgres": "^3.4.8",
     "serverless-http": "^3.2.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "concurrently": "^8.2.2",
     "drizzle-kit": "^0.31.9"
   }
