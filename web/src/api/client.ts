@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { supabase } from "../lib/supabase";
 
 export type ApiError = {
   code: string;
@@ -11,13 +12,18 @@ export async function apiFetch<T>(
   options: RequestInit = {},
   config: { silent?: boolean } = {}
 ): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  const headers = new Headers(options.headers || {});
+  headers.set("Content-Type", "application/json");
+  if (session?.access_token) {
+    headers.set("Authorization", `Bearer ${session.access_token}`);
+  }
+
   const res = await fetch(path, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    credentials: "include"
+    headers,
+    credentials: "omit" // Supabase JWT is enough now
   });
 
   let data: any = null;

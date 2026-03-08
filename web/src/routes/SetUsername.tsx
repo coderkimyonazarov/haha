@@ -11,7 +11,7 @@ import gsap from "gsap";
 
 export default function SetUsername() {
   const navigate = useNavigate();
-  const { user, refresh } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const [username, setUsernameVal] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [available, setAvailable] = React.useState<boolean | null>(null);
@@ -63,9 +63,14 @@ export default function SetUsername() {
     if (!available) return;
     setLoading(true);
     try {
-      await setUsername(username, password || undefined);
+      const { supabase } = await import("../lib/supabase");
+      if (password && password.length >= 6) {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) toast.error("Failed to sync password, but username will be set.");
+      }
+      await setUsername(username);
       toast.success("Identity secured!");
-      await refresh();
+      await refreshProfile();
       navigate("/onboarding"); // After username, proceed to onboarding
     } catch (err: any) {
       toast.error(err?.message || "Failed to set username");

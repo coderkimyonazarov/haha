@@ -1,31 +1,23 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
-import {
-  login,
-  telegramAuth,
-  googleAuth,
-  phoneSendOtp,
-  phoneVerifyOtp,
-} from "../api";
+import { login, telegramAuth } from "../api";
+import { supabase } from "../lib/supabase";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../lib/auth";
 import { toast } from "sonner";
-import { ArrowRight, Fingerprint, Mail, Smartphone, Command } from "lucide-react";
+import { ArrowRight, Mail, Smartphone, Command } from "lucide-react";
 import gsap from "gsap";
 
 type AuthTab = "email" | "phone";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
+  const { refreshProfile, setSessionManually } = useAuth();
   const [tab, setTab] = React.useState<AuthTab>("email");
-  const [email, setEmail] = React.useState("");
+  const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [otp, setOtp] = React.useState("");
-  const [otpSent, setOtpSent] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -39,53 +31,48 @@ export default function Login() {
         { y: 0, opacity: 1, duration: 0.6, stagger: 0.05, ease: "power2.out" }
       );
     }
-  }, [tab]); // Re-animate on tab switch slightly
+  }, [tab]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await login({ identifier: email, password });
-      await refresh();
-      if (res.needsUsername) {
-        navigate("/set-username");
-      } else {
+      // If it looks like an email, use native Supabase auth
+      if (identifier.includes("@")) {
+        const { error, data } = await supabase.auth.signInWithPassword({
+          email: identifier,
+          password
+        });
+        if (error) throw error;
+        await refreshProfile();
         navigate("/dashboard");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhoneSendOtp = async () => {
-    setLoading(true);
-    try {
-      const res = await phoneSendOtp(phone);
-      if (res.sent) {
-        setOtpSent(true);
-        toast.success("Verification code sent!");
-        if (res.code) {
-          toast.info(`Dev code: ${res.code}`);
+      } else {
+        // Otherwise use the backend username resolution proxy
+        const res = await login({ identifier, password });
+        // Set the session returned from our backend
+        if ((res as any).session) {
+          await setSessionManually((res as any).session.access_token, (res as any).session.refresh_token);
         }
+        navigate("/dashboard");
       }
+    } catch (err: any) {
+      toast.error(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePhoneVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleGoogleLogin = async () => {
     try {
-      const res = await phoneVerifyOtp(phone, otp);
-      await refresh();
-      if (res.needsUsername) {
-        navigate("/set-username");
-      } else {
-        navigate("/dashboard");
-      }
-    } finally {
-      setLoading(false);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/dashboard'
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast.error(err.message || "Google login failed");
     }
   };
 
@@ -94,21 +81,19 @@ export default function Login() {
     (window as any).onTelegramAuth = async (user: Record<string, unknown>) => {
       try {
         const res = await telegramAuth(user);
-        await refresh();
-        if (res.needsUsername) {
-          navigate("/set-username");
-        } else {
-          navigate("/dashboard");
+        if ((res as any).session) {
+          await setSessionManually((res as any).session.access_token, (res as any).session.refresh_token);
         }
+        navigate("/dashboard");
       } catch (err: any) {
         toast.error(err?.message || "Telegram login failed");
       }
     };
-  }, [refresh, navigate]);
+  }, [setSessionManually, navigate]);
 
   // Load Telegram widget
   React.useEffect(() => {
-    const botUsername = (window as any).__TELEGRAM_BOT_USERNAME;
+    const botUsername = (window as any).__TELEGRAM_BOT_USERNAME || "SypevBot";
     if (!botUsername) return;
 
     const script = document.createElement("script");
@@ -128,33 +113,11 @@ export default function Login() {
     };
   }, []);
 
-  // Google credential callback
-  React.useEffect(() => {
-    (window as any).handleGoogleCredential = async (response: {
-      credential: string;
-    }) => {
-      try {
-        const res = await googleAuth(response.credential);
-        await refresh();
-        if (res.needsUsername) {
-          navigate("/set-username");
-        } else {
-          navigate("/dashboard");
-        }
-      } catch (err: any) {
-        toast.error(err?.message || "Google login failed");
-      }
-    };
-  }, [refresh, navigate]);
-
   return (
     <div className="min-h-screen flex w-full relative overflow-hidden bg-background">
-      {/* Visual Background */}
       <div className="absolute inset-0 auth-split-gradient pointer-events-none opacity-40 mix-blend-multiply dark:mix-blend-screen" />
 
       <div className="flex-1 grid lg:grid-cols-2 relative z-10 w-full max-w-[1400px] mx-auto">
-        
-        {/* Left Side: Branding / Intro */}
         <div className="hidden lg:flex flex-col justify-between p-12 pr-20 animate-element">
           <div>
             <div className="flex items-center gap-2 mb-16">
@@ -169,22 +132,13 @@ export default function Login() {
               </span>
             </h1>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
-              Access your personalized study schedule, university shortlist, and track your progress in one beautifully designed space.
+              Supabase Auth enabled. Access your personalized study schedule, university shortlist, and track your progress in one beautifully designed space.
             </p>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-foreground/5 border border-border/50 backdrop-blur-sm">
-              <p className="text-sm font-medium">"Success is the sum of small efforts, repeated day in and day out."</p>
-            </div>
           </div>
         </div>
 
-        {/* Right Side: Auth Form */}
         <div className="flex flex-col justify-center items-center p-6 sm:p-12 relative" ref={containerRef}>
-          
           <div className="w-full max-w-md glass-panel p-8 sm:p-10 rounded-[2rem]">
-            
             <div className="mb-8 animate-element">
               <h2 className="text-3xl font-bold tracking-tight mb-2">Sign in</h2>
               <p className="text-muted-foreground text-sm">
@@ -193,7 +147,6 @@ export default function Login() {
             </div>
 
             <div ref={formRef} className="space-y-6">
-              {/* Tab Switcher */}
               <div className="flex gap-1 rounded-xl bg-muted/50 p-1 mb-6 animate-element">
                 <button
                   type="button"
@@ -201,14 +154,14 @@ export default function Login() {
                   onClick={() => setTab("email")}
                 >
                   <Mail className="w-4 h-4" />
-                  Email
+                  Email/Username
                 </button>
                 <button
                   type="button"
                   className={`flex items-center justify-center gap-2 flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all opacity-60 cursor-not-allowed ${tab === "phone" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
                   onClick={(e) => {
                     e.preventDefault();
-                    toast.info("Tez orada qo'shiladi!");
+                    toast.info("Phone auth via Supabase coming soon!");
                   }}
                 >
                   <Smartphone className="w-4 h-4" />
@@ -223,8 +176,8 @@ export default function Login() {
                     <Input
                       className="h-12 bg-background/50 focus:bg-background transition-colors"
                       type="text"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
                       placeholder="name@example.com"
                       required
                     />
@@ -254,7 +207,6 @@ export default function Login() {
                 </form>
               )}
 
-              {/* Divider */}
               <div className="relative my-6 animate-element">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border/60" />
@@ -266,13 +218,21 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Social Buttons */}
-              <div className="space-y-3 animate-element">
+              <div className="space-y-3 animate-element flex flex-col items-center">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="w-full h-12 flex items-center justify-center gap-2"
+                  onClick={handleGoogleLogin}
+                >
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.25033 6.60998L5.31033 9.76C6.27533 6.81 9.07033 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5649 4.88501 12.7949 4.88501 11.9949C4.88501 11.1949 5.01998 10.4249 5.26498 9.6949L1.275 6.65486C0.46 8.22986 0 10.0549 0 11.9949C0 13.9349 0.46 15.7599 1.28 17.3349L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24C15.2404 24 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C9.07041 19.245 6.27541 17.185 5.31041 14.235L1.25043 17.385C3.25543 21.305 7.31041 24 12.0004 24Z" fill="#34A853"/></svg>
+                  Continue with Google
+                </Button>
+                
                 <div
                   id="telegram-login-container"
-                  className="flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow"
+                  className="flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow w-full"
                 />
-                <div id="google-signin-button" className="flex justify-center" />
               </div>
 
               <div className="text-center mt-8 animate-element">

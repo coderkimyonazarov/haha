@@ -1,7 +1,11 @@
 {
   "name": "sypev",
   "private": true,
-  "workspaces": ["server", "web", "shared"],
+  "workspaces": [
+    "server",
+    "web",
+    "shared"
+  ],
   "scripts": {
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "npm --workspace server run dev",
@@ -11,9 +15,11 @@
     "test": "npm --workspace server run test"
   },
   "dependencies": {
+    "postgres": "^3.4.8",
     "serverless-http": "^3.2.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "drizzle-kit": "^0.31.9"
   }
 }

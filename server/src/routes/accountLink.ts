@@ -1,30 +1,12 @@
 import { Router } from "express";
 import { AppError } from "../utils/error";
-import {
-  linkProvider,
-  getUserProviders,
-  unlinkProvider,
-  logAudit,
-  type ProviderType,
-} from "../services/authService";
-import {
-  validateTelegramAuth,
-  type TelegramAuthData,
-} from "../services/telegramAuth";
-import { verifyGoogleIdToken } from "../services/googleAuth";
-import { createOtp, verifyOtp } from "../services/otpService";
-import {
-  sendOtpSms,
-  normalizePhone,
-  isValidPhone,
-} from "../services/smsService";
+import { getDb } from "../db";
+import { linkedIdentities, auditLogs } from "../db/schema";
+import { eq, and } from "drizzle-orm";
+import { supabaseAdmin } from "../utils/supabase";
+import { validateTelegramAuth, type TelegramAuthData } from "../services/telegramAuth";
 import { parseWithSchema } from "../utils/validation";
-import {
-  telegramAuthSchema,
-  googleAuthSchema,
-  phoneOtpSendSchema,
-  phoneOtpVerifySchema,
-} from "../validators/auth";
+import { telegramAuthSchema } from "../validators/auth";
 
 const router = Router();
 
@@ -42,16 +24,29 @@ router.get("/providers", async (req, res, next) => {
     if (!req.user) {
       throw new AppError("UNAUTHORIZED", "Authentication required", 401);
     }
-    const providers = await getUserProviders(req.user.id);
-    res.json({
-      ok: true,
-      data: providers.map((p) => ({
-        id: p.id,
-        provider: p.provider,
-        providerEmail: p.providerEmail,
-        linkedAt: p.linkedAt,
+    const db = getDb();
+    const linked = await db.select().from(linkedIdentities).where(eq(linkedIdentities.userId, req.user.id));
+    
+    // Also fetch from Supabase native identities
+    const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+    const nativeIdentities = user?.identities || [];
+    
+    const providers = [
+      ...nativeIdentities.map(id => ({
+        id: id.id,
+        provider: id.provider,
+        providerEmail: id.identity_data?.email,
+        linkedAt: id.created_at ? new Date(id.created_at).getTime() : Date.now(),
       })),
-    });
+      ...linked.map(l => ({
+        id: l.id,
+        provider: l.provider,
+        providerEmail: null,
+        linkedAt: new Date(l.linkedAt).getTime(),
+      }))
+    ];
+
+    res.json({ ok: true, data: providers });
   } catch (error) {
     next(error);
   }
@@ -75,125 +70,31 @@ router.post("/link/telegram", async (req, res, next) => {
       throw new AppError("INVALID_AUTH", "Invalid Telegram auth data", 401);
     }
 
-    await linkProvider({
+    const db = getDb();
+    
+    // Check if already linked
+    const existing = await db.select().from(linkedIdentities)
+      .where(and(eq(linkedIdentities.provider, "telegram"), eq(linkedIdentities.providerUserId, String(input.id))));
+      
+    if (existing.length > 0) {
+      throw new AppError("PROVIDER_CONFLICT", "Telegram account is already linked", 409);
+    }
+
+    await db.insert(linkedIdentities).values({
       userId: req.user.id,
       provider: "telegram",
       providerUserId: String(input.id),
     });
 
-    await logAudit({
+    await db.insert(auditLogs).values({
       userId: req.user.id,
       action: "provider_linked",
-      metadata: { provider: "telegram" },
+      metadata: JSON.stringify({ provider: "telegram" }),
       ip: getClientIp(req),
       userAgent: req.headers["user-agent"],
     });
 
     res.json({ ok: true, data: { linked: true, provider: "telegram" } });
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("already linked")) {
-      return next(new AppError("PROVIDER_CONFLICT", error.message, 409));
-    }
-    next(error);
-  }
-});
-
-// ── Link Google ───────────────────────────────────────────────────────────────
-router.post("/link/google", async (req, res, next) => {
-  try {
-    if (!req.user) {
-      throw new AppError("UNAUTHORIZED", "Authentication required", 401);
-    }
-
-    const input = parseWithSchema(googleAuthSchema, req.body);
-    const googleUser = await verifyGoogleIdToken(input.credential);
-
-    await linkProvider({
-      userId: req.user.id,
-      provider: "google",
-      providerUserId: googleUser.id,
-      providerEmail: googleUser.email,
-    });
-
-    await logAudit({
-      userId: req.user.id,
-      action: "provider_linked",
-      metadata: { provider: "google", email: googleUser.email },
-      ip: getClientIp(req),
-      userAgent: req.headers["user-agent"],
-    });
-
-    res.json({ ok: true, data: { linked: true, provider: "google" } });
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("already linked")) {
-      return next(new AppError("PROVIDER_CONFLICT", error.message, 409));
-    }
-    next(error);
-  }
-});
-
-// ── Link Phone: Send OTP ──────────────────────────────────────────────────────
-router.post("/link/phone/send-otp", async (req, res, next) => {
-  try {
-    if (!req.user) {
-      throw new AppError("UNAUTHORIZED", "Authentication required", 401);
-    }
-
-    const input = parseWithSchema(phoneOtpSendSchema, req.body);
-    const phone = normalizePhone(input.phone);
-
-    if (!isValidPhone(phone)) {
-      throw new AppError("INVALID_PHONE", "Invalid phone number", 400);
-    }
-
-    const code = await createOtp(req.user.id, phone, "link");
-    await sendOtpSms(phone, code);
-
-    res.json({
-      ok: true,
-      data: {
-        sent: true,
-        ...(process.env.NODE_ENV === "development" ? { code } : {}),
-      },
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("Too many")) {
-      return next(new AppError("RATE_LIMIT", error.message, 429));
-    }
-    next(error);
-  }
-});
-
-// ── Link Phone: Verify OTP ───────────────────────────────────────────────────
-router.post("/link/phone/verify-otp", async (req, res, next) => {
-  try {
-    if (!req.user) {
-      throw new AppError("UNAUTHORIZED", "Authentication required", 401);
-    }
-
-    const input = parseWithSchema(phoneOtpVerifySchema, req.body);
-    const phone = normalizePhone(input.phone);
-
-    const result = await verifyOtp(phone, input.code, "link");
-    if (!result.valid) {
-      throw new AppError("INVALID_OTP", result.error || "Invalid code", 401);
-    }
-
-    await linkProvider({
-      userId: req.user.id,
-      provider: "phone",
-      providerUserId: phone,
-    });
-
-    await logAudit({
-      userId: req.user.id,
-      action: "provider_linked",
-      metadata: { provider: "phone" },
-      ip: getClientIp(req),
-      userAgent: req.headers["user-agent"],
-    });
-
-    res.json({ ok: true, data: { linked: true, provider: "phone" } });
   } catch (error) {
     if (error instanceof Error && error.message.includes("already linked")) {
       return next(new AppError("PROVIDER_CONFLICT", error.message, 409));
@@ -209,32 +110,31 @@ router.delete("/providers/:provider", async (req, res, next) => {
       throw new AppError("UNAUTHORIZED", "Authentication required", 401);
     }
 
-    const provider = req.params.provider as ProviderType;
-    const validProviders: ProviderType[] = [
-      "telegram",
-      "google",
-      "email",
-      "phone",
-    ];
-    if (!validProviders.includes(provider)) {
-      throw new AppError("INVALID_PROVIDER", "Invalid provider", 400);
+    const provider = req.params.provider;
+    const db = getDb();
+
+    if (provider === "telegram") {
+      await db.delete(linkedIdentities)
+        .where(and(eq(linkedIdentities.userId, req.user.id), eq(linkedIdentities.provider, "telegram")));
+    } else {
+      // Unlink native provider via Supabase Admin API
+      const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(req.user.id);
+      const identity = user?.identities?.find(id => id.provider === provider);
+      if (identity) {
+        await supabaseAdmin.auth.admin.deleteIdentity(identity.identity_id);
+      }
     }
 
-    await unlinkProvider(req.user.id, provider);
-
-    await logAudit({
+    await db.insert(auditLogs).values({
       userId: req.user.id,
       action: "provider_unlinked",
-      metadata: { provider },
+      metadata: JSON.stringify({ provider }),
       ip: getClientIp(req),
       userAgent: req.headers["user-agent"],
     });
 
     res.json({ ok: true, data: { unlinked: true, provider } });
   } catch (error) {
-    if (error instanceof Error && error.message.includes("Cannot unlink")) {
-      return next(new AppError("UNLINK_BLOCKED", error.message, 400));
-    }
     next(error);
   }
 });

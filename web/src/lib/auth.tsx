@@ -1,99 +1,129 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-} from "react";
-import {
-  me,
-  logout as apiLogout,
-  type User,
-  type Profile,
-  type AuthProvider,
-  type UserPreferences,
-} from "../api";
+import { useState, useEffect, createContext, useContext, ReactNode } from "react";
+import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "./supabase";
+import * as api from "../api";
 import { applyTheme } from "./theme";
 
-type AuthState = {
+interface AuthState {
   user: User | null;
-  profile: Profile | null;
-  providers: AuthProvider[];
-  preferences: UserPreferences | null;
+  session: Session | null;
+  profile: any | null;
   loading: boolean;
-  refresh: () => Promise<void>;
-  refreshUser: () => Promise<void>; // Alias for convenience in components
-  logout: () => Promise<void>;
-};
+  needsUsername: boolean;
+  preferences: any | null;
+  providers: { provider: string; linkedAt: number }[];
+}
 
-const AuthContext = createContext<AuthState>({
-  user: null,
-  profile: null,
-  providers: [],
-  preferences: null,
-  loading: true,
-  refresh: async () => {},
-  refreshUser: async () => {},
-  logout: async () => {},
-});
+interface AuthContextValue extends AuthState {
+  refreshProfile: () => Promise<void>;
+  signOut: () => Promise<void>;
+  setSessionManually: (accessToken: string, refreshToken: string) => Promise<void>;
+}
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [providers, setProviders] = useState<AuthProvider[]>([]);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [loading, setLoading] = useState(true);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-  const refresh = useCallback(async () => {
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    session: null,
+    profile: null,
+    loading: true,
+    needsUsername: false,
+    preferences: null,
+    providers: [],
+  });
+
+  const fetchProfileData = async (sessionUser: User | null) => {
+    if (!sessionUser) {
+      setState((s) => ({ ...s, user: null, session: null, profile: null, loading: false }));
+      return;
+    }
+    
     try {
-      const res = await me();
-      setUser(res.user || null);
-      setProfile(res.profile || null);
-      setProviders(res.providers || []);
-      setPreferences(res.preferences || null);
-
-      if (res.preferences) {
-        applyTheme({
-          theme: res.preferences.theme,
-          accent: res.preferences.accent,
-          vibe: res.preferences.vibe,
-          onboardingDone: res.preferences.onboardingDone === 1,
-        });
+      const { data } = await api.get("/auth/me");
+      if (data?.data) {
+        if (data.data.preferences) {
+          applyTheme(
+            data.data.preferences.theme,
+            data.data.preferences.accent,
+            data.data.preferences.vibe
+          );
+        }
+        setState((s) => ({
+          ...s,
+          user: sessionUser,
+          profile: data.data.profile,
+          needsUsername: data.data.user?.needsUsername || false,
+          preferences: data.data.preferences,
+          providers: data.data.providers || [],
+          loading: false,
+        }));
+      } else {
+        setState((s) => ({ ...s, user: sessionUser, loading: false }));
       }
-    } catch {
-      setUser(null);
-      setProfile(null);
-      setProviders([]);
-      setPreferences(null);
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      setState((s) => ({ ...s, user: sessionUser, loading: false }));
     }
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await apiLogout();
-    } finally {
-      setUser(null);
-      setProfile(null);
-      setProviders([]);
-      setPreferences(null);
-    }
-  }, []);
+  };
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    // Initial fetch
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setState((s) => ({ ...s, session }));
+      fetchProfileData(session?.user || null);
+    });
+
+    // Listen to changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setState((s) => ({ ...s, session, loading: true }));
+        fetchProfileData(session?.user || null);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const refreshProfile = async () => {
+    await fetchProfileData(state.user);
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setState({
+      user: null,
+      session: null,
+      profile: null,
+      loading: false,
+      needsUsername: false,
+      preferences: null,
+      providers: [],
+    });
+  };
+
+  const setSessionManually = async (access_token: string, refresh_token: string) => {
+    const { data, error } = await supabase.auth.setSession({
+      access_token,
+      refresh_token,
+    });
+    if (error) throw error;
+    setState((s) => ({ ...s, session: data.session, loading: true }));
+    fetchProfileData(data.session?.user || null);
+  };
 
   return (
-    <AuthContext.Provider
-      value={{ user, profile, providers, preferences, loading, refresh, refreshUser: refresh, logout }}
-    >
+    <AuthContext.Provider value={{ ...state, refreshProfile, signOut, setSessionManually }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
