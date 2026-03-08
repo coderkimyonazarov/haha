@@ -525,7 +525,7 @@ router.post("/set-username", async (req, res, next) => {
     }
 
     const input = parseWithSchema(usernameSchema, req.body);
-    const user = await setUsernameService(req.user.id, input.username);
+    const user = await setUsernameService(req.user.id, input.username, input.password);
 
     await logAudit({
       userId: req.user.id,

@@ -132,10 +132,10 @@ export async function checkUsername(username: string) {
   );
 }
 
-export async function setUsername(username: string) {
+export async function setUsername(username: string, password?: string) {
   return apiFetch<User>("/api/auth/set-username", {
     method: "POST",
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ username, password }),
   });
 }
 

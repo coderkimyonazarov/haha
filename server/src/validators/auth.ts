@@ -51,6 +51,11 @@ export const usernameSchema = z.object({
       /^[a-zA-Z][a-zA-Z0-9_]{2,29}$/,
       "Username must start with a letter and contain only letters, numbers, and underscores",
     ),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password must be at most 128 characters")
+    .optional(),
 });
 
 // ── Password Reset ────────────────────────────────────────────────────────────

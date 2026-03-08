@@ -357,7 +357,7 @@ export async function isUsernameAvailable(username: string): Promise<boolean> {
   return !existing;
 }
 
-export async function setUsername(userId: string, username: string) {
+export async function setUsername(userId: string, username: string, plainPassword?: string) {
   const validation = validateUsername(username);
   if (!validation.valid) throw new Error(validation.error);
 
@@ -367,12 +367,18 @@ export async function setUsername(userId: string, username: string) {
   }
 
   const db = getDb();
+  const updateData: any = {
+    username: username.toLowerCase().trim(),
+    updatedAt: Date.now(),
+  };
+
+  if (plainPassword) {
+    updateData.passwordHash = await hashPassword(plainPassword);
+  }
+
   await db
     .update(users)
-    .set({
-      username: username.toLowerCase().trim(),
-      updatedAt: Date.now(),
-    })
+    .set(updateData)
     .where(eq(users.id, userId));
 
   return db.select().from(users).where(eq(users.id, userId)).get()!;

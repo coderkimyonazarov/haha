@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
+    --background: 0 0% 100%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -26,10 +26,12 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221 83% 53%;
     --radius: 0.75rem;
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.3);
   }
 
   .dark {
-    --background: 222 47% 11%;
+    --background: 220 20% 6%;
     --foreground: 210 40% 98%;
     --card: 222 47% 11%;
     --card-foreground: 210 40% 98%;
@@ -48,6 +50,8 @@
     --border: 217 32% 17%;
     --input: 217 32% 17%;
     --ring: 224 76% 48%;
+    --glass-bg: rgba(20, 20, 25, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.05);
   }
 
   /* Accent Colors */
@@ -78,12 +82,15 @@
   }
   [data-vibe="bold"] {
     --radius: 0.25rem;
-    font-weight: 500;
+    --background: 220 15% 10%;
+  }
+  .dark[data-vibe="bold"] {
+    --background: 220 25% 4%;
   }
 }
 
 body {
-  @apply bg-background text-foreground antialiased;
+  @apply bg-background text-foreground antialiased transition-colors duration-500;
   font-family: "Manrope", "Segoe UI", system-ui, sans-serif;
 }
 
@@ -96,4 +103,39 @@ h2,
 h3,
 h4 {
   font-family: "Sora", "Manrope", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Custom UI Utilities */
+.glass-panel {
+  background-color: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+}
+
+.auth-split-gradient {
+  background: radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.15), transparent 50%),
+              radial-gradient(circle at 0% 100%, hsl(var(--primary) / 0.10), transparent 50%);
+}
+
+.auth-split-bg-soft {
+  background: linear-gradient(135deg, hsl(346 84% 96%), hsl(199 89% 96%));
+}
+
+.dark .auth-split-bg-soft {
+  background: linear-gradient(135deg, hsl(346 40% 12%), hsl(199 40% 12%));
+}
+
+.auth-split-bg-bold {
+  background: linear-gradient(135deg, hsl(220 15% 15%), hsl(220 25% 4%));
+}
+
+.auth-split-bg-minimal {
+  background: linear-gradient(135deg, hsl(0 0% 98%), hsl(0 0% 95%));
+}
+
+.dark .auth-split-bg-minimal {
+  background: linear-gradient(135deg, hsl(220 10% 8%), hsl(220 10% 4%));
 }

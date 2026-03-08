@@ -3,26 +3,40 @@ import { useNavigate } from "react-router-dom";
 import { checkUsername, setUsername } from "../api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../lib/auth";
-import Page from "../components/Page";
 import { toast } from "sonner";
+import { ArrowLeft, CheckCircle2, AlertCircle, Fingerprint } from "lucide-react";
+import gsap from "gsap";
 
 export default function SetUsername() {
   const navigate = useNavigate();
   const { user, refresh } = useAuth();
   const [username, setUsernameVal] = React.useState("");
+  const [password, setPassword] = React.useState("");
   const [available, setAvailable] = React.useState<boolean | null>(null);
   const [availError, setAvailError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Animation on load
+  React.useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current.children,
+        { y: 30, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.8, stagger: 0.1, ease: "power3.out" }
+      );
+    }
+  }, []);
+
+  // Redirect if user already has a username
+  React.useEffect(() => {
+    if (user && user.username) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
 
   // Debounced availability check
   React.useEffect(() => {
@@ -49,10 +63,10 @@ export default function SetUsername() {
     if (!available) return;
     setLoading(true);
     try {
-      await setUsername(username);
-      toast.success("Username set!");
+      await setUsername(username, password || undefined);
+      toast.success("Identity secured!");
       await refresh();
-      navigate("/dashboard");
+      navigate("/onboarding"); // After username, proceed to onboarding
     } catch (err: any) {
       toast.error(err?.message || "Failed to set username");
     } finally {
@@ -60,66 +74,97 @@ export default function SetUsername() {
     }
   };
 
-  // Redirect if user already has a username
-  React.useEffect(() => {
-    if (user && user.username) {
-      navigate("/dashboard");
-    }
-  }, [user, navigate]);
-
   return (
-    <Page className="flex items-center justify-center">
-      <Card className="w-full max-w-md" data-animate="card">
-        <CardHeader>
-          <CardTitle>Choose Your Username</CardTitle>
-          <CardDescription>
-            This is your unique identity on Sypev. It can't be changed easily
-            later.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmit}>
+    <div className="min-h-screen flex w-full relative overflow-hidden bg-background">
+      {/* Visual Background */}
+      <div className="absolute inset-0 auth-split-gradient pointer-events-none opacity-40" />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 sm:p-12 relative z-10 w-full max-w-7xl mx-auto">
+        
+        <div 
+          ref={containerRef}
+          className="w-full max-w-md glass-panel p-8 sm:p-10 rounded-3xl"
+        >
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+              <Fingerprint className="w-8 h-8" />
+            </div>
+          </div>
+
+          <div className="text-center space-y-2 mb-8">
+            <h1 className="text-3xl font-bold tracking-tight">Claim Identity</h1>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              You're almost in. Choose a unique handle to represent yourself in the community.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label>Username</Label>
-              <Input
-                value={username}
-                onChange={(e) =>
-                  setUsernameVal(
-                    e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""),
-                  )
-                }
-                placeholder="e.g. john_doe"
-                maxLength={30}
-                required
-              />
+              <Label className="font-semibold text-foreground/80">Username</Label>
+              <div className="relative">
+                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono font-medium">@</span>
+                <Input
+                  className="pl-9 h-12 bg-background/50 focus:bg-background transition-colors"
+                  value={username}
+                  onChange={(e) =>
+                    setUsernameVal(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                  }
+                  placeholder="john_doe"
+                  maxLength={30}
+                  required
+                />
+              </div>
+              
+              {/* Validation Feedback */}
               {username.length > 0 && (
-                <div className="text-sm">
+                <div className="text-xs font-medium h-5 flex items-center mt-1">
                   {available === null && username.length >= 3 && (
-                    <span className="text-muted-foreground">Checking...</span>
+                    <span className="text-muted-foreground animate-pulse">Checking availability...</span>
                   )}
                   {available === true && (
-                    <span className="text-green-600">✓ Available</span>
+                    <span className="text-emerald-500 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Available & ready
+                    </span>
                   )}
                   {available === false && (
-                    <span className="text-red-500">
-                      ✗ {availError || "Not available"}
+                    <span className="text-destructive flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> {availError || "Not available"}
                     </span>
                   )}
                   {username.length < 3 && (
-                    <span className="text-muted-foreground">
-                      At least 3 characters
-                    </span>
+                    <span className="text-muted-foreground">Keep typing... (At least 3 chars)</span>
                   )}
                 </div>
               )}
             </div>
 
-            <Button className="w-full" disabled={loading || !available}>
-              {loading ? "Setting..." : "Set Username"}
+            <div className="space-y-2 pt-2">
+               <div className="flex items-center justify-between">
+                 <Label className="font-semibold text-foreground/80">Set Password <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+               </div>
+               <Input
+                  className="h-12 bg-background/50 focus:bg-background transition-colors"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a password"
+                  minLength={8}
+               />
+               <p className="text-[11px] text-muted-foreground leading-snug">
+                 Since you logged in with a social account, you can optionally set a password now to allow logging in with <strong>Email/Username + Password</strong> in the future.
+               </p>
+            </div>
+
+            <Button 
+              className="w-full h-12 text-base font-semibold transition-all mt-4 hover:scale-[1.02]" 
+              disabled={loading || !available}
+            >
+              {loading ? "Securing Identity..." : "Complete Setup"}
             </Button>
           </form>
-        </CardContent>
-      </Card>
-    </Page>
+        </div>
+      </div>
+    </div>
   );
 }
