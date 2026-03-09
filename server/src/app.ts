@@ -31,32 +31,71 @@ app.use(
 );
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+const normalizeOrigin = (value: string) => value.replace(/\/$/, "");
+
 const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((s) => s.trim())
+  .map(normalizeOrigin)
   .filter(Boolean);
 
-const isDev = process.env.NODE_ENV !== "production";
-const isLocalOrigin = (origin: string) =>
-  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+const allowLocalCors = process.env.ALLOW_LOCAL_CORS !== "false";
+
+const PRIVATE_HOST_PATTERNS = [
+  /^10\.\d+\.\d+\.\d+$/,
+  /^127\.\d+\.\d+\.\d+$/,
+  /^192\.168\.\d+\.\d+$/,
+  /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/,
+];
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (!host) {
+    return false;
+  }
+
+  if (host === "localhost" || host === "::1" || host === "[::1]") {
+    return true;
+  }
+
+  if (host.endsWith(".local")) {
+    return true;
+  }
+
+  return PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(host));
+}
+
+function isLocalOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return false;
+    }
+    return isPrivateOrLocalHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
-      
+      const normalizedOrigin = normalizeOrigin(origin);
+
       const isAllowed =
-        allowedOrigins.includes(origin) ||
-        (isDev && isLocalOrigin(origin)) ||
-        origin.endsWith(".vercel.app") ||
-        origin === "https://sypev.com" ||
-        origin === "https://www.sypev.com" ||
-        origin === process.env.VITE_API_URL;
-        
+        allowedOrigins.includes(normalizedOrigin) ||
+        (allowLocalCors && isLocalOrigin(normalizedOrigin)) ||
+        normalizedOrigin.endsWith(".vercel.app") ||
+        normalizedOrigin === "https://sypev.com" ||
+        normalizedOrigin === "https://www.sypev.com" ||
+        normalizedOrigin === "http://sypev.com" ||
+        normalizedOrigin === "http://www.sypev.com";
+
       if (isAllowed) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        callback(null, false);
       }
     },
     credentials: true,

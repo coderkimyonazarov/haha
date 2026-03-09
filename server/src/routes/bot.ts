@@ -82,7 +82,10 @@ function getAppOrigin(): string {
 }
 
 function getBotInternalSecret(): string {
-  const value = process.env.BOT_INTERNAL_API_KEY?.trim();
+  const value =
+    process.env.BOT_INTERNAL_API_KEY?.trim() ||
+    process.env.APP_AUTH_JWT_SECRET?.trim() ||
+    process.env.ADMIN_SECRET?.trim();
   if (!value) {
     throw new AppError(
       "CONFIG_ERROR",

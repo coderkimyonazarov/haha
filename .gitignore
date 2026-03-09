@@ -1,6 +1,9 @@
 node_modules
 dist/
 .env
+server/.env
+web/.env.local
+bot/.env
 *.tsbuildinfo
 vite.config.d.ts
 vite.config.js
