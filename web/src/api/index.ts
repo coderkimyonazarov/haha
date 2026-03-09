@@ -58,6 +58,13 @@ export type LoginResponse = {
   };
 };
 
+export type MeResponse = {
+  user: User | null;
+  profile: Profile | null;
+  providers: AuthProvider[];
+  preferences: UserPreferences | null;
+};
+
 export type TelegramAuthResponse =
   | {
       linked: true;
@@ -221,7 +228,7 @@ export async function checkUsername(username: string) {
 }
 
 export async function setUsername(username: string, password?: string) {
-  return apiFetch<User>("/api/auth/set-username", {
+  return apiFetch<{ username: string }>("/api/auth/set-username", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
@@ -241,12 +248,7 @@ export async function logout() {
 }
 
 export async function me() {
-  return apiFetch<{
-    user: User;
-    profile: Profile | null;
-    providers?: AuthProvider[];
-    preferences?: UserPreferences;
-  }>("/api/auth/me", {}, { silent: true });
+  return apiFetch<MeResponse>("/api/auth/me", {}, { silent: true });
 }
 
 export async function updatePreferences(payload: Partial<UserPreferences>) {
@@ -405,20 +407,20 @@ export async function adminLogin(payload: {
   return apiFetch<{ admin: boolean }>("/api/auth/admin-login", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, { authMode: "cookie" });
 }
 
 export async function adminLogout() {
   return apiFetch<{ loggedOut: boolean }>("/api/auth/admin-logout", {
     method: "POST",
-  });
+  }, { authMode: "cookie" });
 }
 
 export async function adminMe() {
   return apiFetch<{ admin: boolean }>(
     "/api/auth/admin-me",
     {},
-    { silent: true },
+    { silent: true, authMode: "cookie" },
   );
 }
 

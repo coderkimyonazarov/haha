@@ -312,3 +312,49 @@
   padding: 0.78rem 0.5rem;
   color: rgba(226, 232, 240, 0.94);
 }
+
+.cosmos-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background:
+    radial-gradient(130% 88% at 12% -8%, rgba(56, 189, 248, 0.22), transparent 58%),
+    radial-gradient(120% 84% at 90% 6%, rgba(196, 181, 253, 0.22), transparent 62%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(9, 14, 30, 0.88));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 22px 46px -34px rgba(2, 6, 23, 0.95);
+}
+
+.cosmos-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 72px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(2, 6, 23, 0.65) 100%);
+}
+
+.cosmos-panel {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background:
+    linear-gradient(165deg, rgba(15, 23, 42, 0.82), rgba(9, 14, 30, 0.82)),
+    rgba(15, 23, 42, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 36px -28px rgba(2, 6, 23, 0.85);
+}
+
+.cosmos-soft {
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.cosmos-pill {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.62);
+  color: rgba(226, 232, 240, 0.9);
+}

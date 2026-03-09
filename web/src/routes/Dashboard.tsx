@@ -56,7 +56,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 pb-14 sm:space-y-8 sm:pb-20">
-      <section className="brand-frame overflow-hidden p-4 sm:p-6 lg:p-8">
+      <section className="cosmos-hero p-4 sm:p-6 lg:p-8">
         <div className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Sypev Workspace</p>
@@ -73,13 +73,13 @@ export default function Dashboard() {
                 interests.map((interest: string) => (
                   <span
                     key={interest}
-                    className="rounded-full border border-border/80 bg-card px-3 py-1 text-xs font-semibold capitalize text-foreground"
+                    className="cosmos-pill rounded-full px-3 py-1 text-xs font-semibold capitalize"
                   >
                     {interest}
                   </span>
                 ))
               ) : (
-                <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                <div className="cosmos-soft flex items-center gap-3 px-3 py-2 text-xs text-slate-300/80">
                   <BrandMotionLogo className="w-16" decorative />
                   <span>Add interests in onboarding/settings to unlock deeper personalization.</span>
                 </div>
@@ -101,13 +101,13 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-4">
-            <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">AI Suggestion</p>
-              <p className="mt-2 text-sm leading-relaxed">{aiSuggestion}</p>
+            <div className="cosmos-soft p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-300/70">AI Suggestion</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-100">{aiSuggestion}</p>
             </div>
-            <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Telegram</p>
-              <p className="mt-2 text-sm leading-relaxed">
+            <div className="cosmos-soft p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-300/70">Telegram</p>
+              <p className="mt-2 text-sm leading-relaxed text-slate-100">
                 {telegramLinked
                   ? "Telegram is linked to this profile. Bot and web are running in one unified account."
                   : "Telegram is not linked yet. Link it in Account to enable one-tap sign-in and bot sync."}
@@ -126,7 +126,7 @@ export default function Dashboard() {
       <section className="grid gap-4 md:grid-cols-3">
         <Link
           to="/study/sat"
-          className="rounded-2xl border border-border/70 bg-card/80 p-4 transition-colors hover:border-foreground/30 sm:p-5"
+          className="cosmos-panel p-4 transition-colors hover:border-cyan-200/35 sm:p-5"
         >
           <BookOpen className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">SAT Engine</h3>
@@ -137,7 +137,7 @@ export default function Dashboard() {
 
         <Link
           to="/admissions"
-          className="rounded-2xl border border-border/70 bg-card/80 p-4 transition-colors hover:border-foreground/30 sm:p-5"
+          className="cosmos-panel p-4 transition-colors hover:border-cyan-200/35 sm:p-5"
         >
           <GraduationCap className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">Admissions Radar</h3>
@@ -148,7 +148,7 @@ export default function Dashboard() {
 
         <Link
           to="/tutor"
-          className="rounded-2xl border border-border/70 bg-card/80 p-4 transition-colors hover:border-foreground/30 sm:p-5"
+          className="cosmos-panel p-4 transition-colors hover:border-cyan-200/35 sm:p-5"
         >
           <Brain className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">AI Counselor</h3>
@@ -158,25 +158,25 @@ export default function Dashboard() {
         </Link>
       </section>
 
-      <section className="rounded-2xl border border-border/70 bg-card/80 p-4 sm:p-5">
+      <section className="cosmos-panel p-4 sm:p-5">
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-foreground" />
           <h3 className="text-lg font-semibold">Current style profile</h3>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Persona</p>
-            <p className="mt-1 text-sm font-semibold capitalize">
+          <div className="cosmos-soft p-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-300/75">Persona</p>
+            <p className="mt-1 text-sm font-semibold capitalize text-slate-100">
               {(preferences?.persona ?? "clean_minimal").replace(/_/g, " ")}
             </p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Theme</p>
-            <p className="mt-1 text-sm font-semibold capitalize">{preferences?.theme ?? "system"}</p>
+          <div className="cosmos-soft p-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-300/75">Theme</p>
+            <p className="mt-1 text-sm font-semibold capitalize text-slate-100">{preferences?.theme ?? "system"}</p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-background/70 p-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Bot + Link</p>
-            <p className="mt-1 text-sm font-semibold flex items-center gap-2">
+          <div className="cosmos-soft p-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-300/75">Bot + Link</p>
+            <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-100">
               <Bot className="h-4 w-4 text-foreground" />
               {telegramLinked ? "Linked" : "Not linked"}
             </p>
@@ -185,7 +185,7 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl border border-border/70 bg-card/85 p-4 sm:p-5">
+        <article className="cosmos-panel p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Rocket className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Yangi funksiyalar</h3>
@@ -201,7 +201,7 @@ export default function Dashboard() {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-border/70 bg-card/85 p-4 sm:p-5">
+        <article className="cosmos-panel p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Aniqlangan xatolar/risklar va tuzatish ishlari</h3>
@@ -213,7 +213,7 @@ export default function Dashboard() {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-border/70 bg-card/85 p-4 sm:p-5">
+        <article className="cosmos-panel p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Clock3 className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Kelgusi 24 soat ichida bajariladigan ishlar</h3>

@@ -7,6 +7,7 @@ import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { Badge } from "../components/ui/badge";
 import Page from "../components/Page";
+import { CalendarClock, DollarSign, GraduationCap, Globe2, Link as LinkIcon } from "lucide-react";
 
 export default function UniversityDetail() {
   const { id } = useParams();
@@ -53,37 +54,42 @@ export default function UniversityDetail() {
   };
 
   if (loading) {
-    return <div className="text-muted-foreground">Loading university...</div>;
+    return <div className="text-slate-300/80">Loading university...</div>;
   }
 
   if (!university) {
-    return <div className="text-muted-foreground">University not found.</div>;
+    return <div className="text-slate-300/80">University not found.</div>;
   }
 
   return (
     <Page className="space-y-8">
-      <div className="space-y-2" data-animate="fade">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">University</p>
-        <h1 className="text-4xl font-semibold">{university.name}</h1>
-        <p className="text-muted-foreground">
+      <section className="cosmos-hero p-6 sm:p-8" data-animate="fade">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-300/70">University</p>
+        <h1 className="mt-2 inline-flex items-center gap-2 text-4xl font-semibold text-slate-100">
+          <GraduationCap className="h-7 w-7 text-indigo-200" />
+          {university.name}
+        </h1>
+        <p className="mt-2 text-slate-300/80">
           {university.state} - SAT {university.satRangeMin ?? "N/A"}-{university.satRangeMax ?? "N/A"}
         </p>
-      </div>
+      </section>
 
-      <Card data-animate="card">
+      <Card className="cosmos-panel text-slate-100" data-animate="card">
         <CardHeader>
           <CardTitle>Overview</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-3 text-sm text-slate-300/85">
           <p>{university.description || "No description yet."}</p>
-          <div>Tuition: {university.tuitionUsd ? `$${university.tuitionUsd}` : "N/A"}</div>
-          <div>Aid policy: {university.aidPolicy || "N/A"}</div>
-          <div>English requirement: {university.englishReq || "N/A"}</div>
-          <div>Application deadline: {university.applicationDeadline || "N/A"}</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="cosmos-soft p-3"><span className="inline-flex items-center gap-1"><DollarSign className="h-4 w-4" /> Tuition:</span> {university.tuitionUsd ? `$${university.tuitionUsd}` : "N/A"}</div>
+            <div className="cosmos-soft p-3"><span className="inline-flex items-center gap-1"><Globe2 className="h-4 w-4" /> Aid policy:</span> {university.aidPolicy || "N/A"}</div>
+            <div className="cosmos-soft p-3">English requirement: {university.englishReq || "N/A"}</div>
+            <div className="cosmos-soft p-3"><span className="inline-flex items-center gap-1"><CalendarClock className="h-4 w-4" /> Deadline:</span> {university.applicationDeadline || "N/A"}</div>
+          </div>
         </CardContent>
       </Card>
 
-      <Card data-animate="card">
+      <Card className="cosmos-panel text-slate-100" data-animate="card">
         <CardHeader>
           <CardTitle>Did you know?</CardTitle>
         </CardHeader>
@@ -93,30 +99,31 @@ export default function UniversityDetail() {
               {university.facts
                 .filter((fact: any) => fact.sourceUrl)
                 .map((fact: any) => (
-                  <div key={fact.id} className="rounded-2xl border border-white/70 bg-white/70 p-4 text-sm">
+                  <div key={fact.id} className="cosmos-soft p-4 text-sm text-slate-100">
                     <div className="flex flex-wrap items-center gap-2">
-                      {fact.tag && <Badge variant="outline">{fact.tag}</Badge>}
-                      {fact.year && <Badge variant="outline">{fact.year}</Badge>}
+                      {fact.tag && <Badge className="cosmos-pill">{fact.tag}</Badge>}
+                      {fact.year && <Badge className="cosmos-pill">{fact.year}</Badge>}
                     </div>
                     <p className="mt-2">{fact.factText}</p>
                     <a
-                      className="mt-2 inline-block text-xs font-semibold text-primary underline"
+                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-200 underline"
                       href={fact.sourceUrl}
                       target="_blank"
                       rel="noreferrer"
                     >
+                      <LinkIcon className="h-3.5 w-3.5" />
                       Source
                     </a>
                   </div>
                 ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No facts yet. Add one below.</p>
+            <p className="text-sm text-slate-300/75">No facts yet. Add one below.</p>
           )}
         </CardContent>
       </Card>
 
-      <Card data-animate="card">
+      <Card className="cosmos-panel text-slate-100" data-animate="card">
         <CardHeader>
           <CardTitle>Add a fact</CardTitle>
         </CardHeader>
@@ -124,23 +131,23 @@ export default function UniversityDetail() {
           <form className="space-y-4" onSubmit={submitFact}>
             <div className="space-y-2">
               <label className="text-sm font-medium">Fact text</label>
-              <Textarea value={factText} onChange={(e) => setFactText(e.target.value)} maxLength={280} required />
+              <Textarea className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={factText} onChange={(e) => setFactText(e.target.value)} maxLength={280} required />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Source URL</label>
-              <Input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} required />
+              <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} required />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Tag</label>
-                <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="ED, RD, Policy" />
+                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="ED, RD, Policy" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Year</label>
-                <Input value={year} onChange={(e) => setYear(e.target.value)} placeholder="2025" />
+                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={year} onChange={(e) => setYear(e.target.value)} placeholder="2025" />
               </div>
             </div>
-            <Button disabled={saving}>{saving ? "Saving..." : "Add fact"}</Button>
+            <Button className="border border-cyan-300/35 bg-cyan-400/15 text-slate-100 hover:bg-cyan-400/25" disabled={saving}>{saving ? "Saving..." : "Add fact"}</Button>
           </form>
         </CardContent>
       </Card>

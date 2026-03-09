@@ -5,6 +5,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Button } from "../components/ui/button";
 import Page from "../components/Page";
+import { CircleUserRound, Trophy } from "lucide-react";
 
 export default function Profile() {
   const [loading, setLoading] = React.useState(true);
@@ -50,17 +51,17 @@ export default function Profile() {
   };
 
   if (loading) {
-    return <div className="text-muted-foreground">Loading profile...</div>;
+    return <div className="text-slate-300/80">Loading profile...</div>;
   }
 
   return (
     <Page className="space-y-8">
-      <div className="space-y-2" data-animate="fade">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">Profile</p>
-        <h1 className="text-4xl font-semibold">Your student details.</h1>
-        <p className="text-muted-foreground">Update your background to personalize recommendations.</p>
-      </div>
-      <Card data-animate="card">
+      <section className="cosmos-hero p-6 sm:p-8" data-animate="fade">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-300/70">Profile</p>
+        <h1 className="mt-2 inline-flex items-center gap-2 text-4xl font-semibold text-slate-100"><CircleUserRound className="h-7 w-7 text-indigo-200" />Your student details.</h1>
+        <p className="mt-2 text-slate-300/80">Update your background to personalize recommendations.</p>
+      </section>
+      <Card className="cosmos-panel text-slate-100" data-animate="card">
         <CardHeader>
           <CardTitle>Student details</CardTitle>
         </CardHeader>
@@ -69,34 +70,34 @@ export default function Profile() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Grade</Label>
-                <Input type="number" value={grade} onChange={(e) => setGrade(e.target.value)} min={1} max={12} />
+                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" type="number" value={grade} onChange={(e) => setGrade(e.target.value)} min={1} max={12} />
               </div>
               <div className="space-y-2">
                 <Label>Country</Label>
-                <Input value={country} onChange={(e) => setCountry(e.target.value)} />
+                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={country} onChange={(e) => setCountry(e.target.value)} />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Target major</Label>
-                <Input value={targetMajor} onChange={(e) => setTargetMajor(e.target.value)} />
+                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={targetMajor} onChange={(e) => setTargetMajor(e.target.value)} />
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/70 bg-white/70 p-5">
-              <h3 className="text-sm font-semibold">SAT subscores</h3>
+            <div className="cosmos-soft p-5">
+              <h3 className="text-sm font-semibold text-slate-100">SAT subscores</h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Math</Label>
-                  <Input type="number" value={satMath} onChange={(e) => setSatMath(e.target.value)} min={200} max={800} />
+                  <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" type="number" value={satMath} onChange={(e) => setSatMath(e.target.value)} min={200} max={800} />
                 </div>
                 <div className="space-y-2">
                   <Label>Reading & Writing</Label>
-                  <Input type="number" value={satRw} onChange={(e) => setSatRw(e.target.value)} min={200} max={800} />
+                  <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" type="number" value={satRw} onChange={(e) => setSatRw(e.target.value)} min={200} max={800} />
                 </div>
               </div>
-              <div className="mt-3 text-sm text-muted-foreground">Total: {satTotal ?? "Not set"}</div>
+              <div className="mt-3 inline-flex items-center gap-1 text-sm text-slate-300/80"><Trophy className="h-4 w-4 text-cyan-200" />Total: {satTotal ?? "Not set"}</div>
             </div>
 
-            <Button disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
+            <Button className="border border-cyan-300/35 bg-cyan-400/15 text-slate-100 hover:bg-cyan-400/25" disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
           </form>
         </CardContent>
       </Card>

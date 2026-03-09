@@ -7,12 +7,15 @@ export const getSessionCookieName = () => {
   return "sypev_session_cookie";
 };
 
+export const getAdminCookieName = () => "sypev_admin";
+
 // Extends express Request
 declare global {
   namespace Express {
     interface Request {
       user?: any; // We can type this to auth.users if needed
       admin?: boolean;
+      authSource?: "none" | "bearer" | "telegram" | "admin_cookie";
     }
   }
 }
@@ -23,12 +26,18 @@ export const authOptional = async (
   next: NextFunction,
 ) => {
   try {
+    req.authSource = "none";
     const authHeader = req.headers.authorization;
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice("Bearer ".length).trim();
+      if (!token) {
+        return next();
+      }
+
       const { data: { user }, error } = await getSupabaseAdmin().auth.getUser(token);
       if (!error && user) {
         req.user = user;
+        req.authSource = "bearer";
       } else {
         const customSecret = process.env.APP_AUTH_JWT_SECRET;
         if (customSecret) {
@@ -40,6 +49,7 @@ export const authOptional = async (
               } = await getSupabaseAdmin().auth.admin.getUserById(payload.sub);
               if (telegramUser) {
                 req.user = telegramUser;
+                req.authSource = "telegram";
               }
             }
           } catch {
@@ -62,17 +72,24 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 };
 
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  const adminCookie = req.cookies?.["sypev_admin"];
+  const adminCookie = req.cookies?.[getAdminCookieName()];
   if (adminCookie === "true") {
     req.admin = true;
+    req.authSource = "admin_cookie";
     return next();
   }
 
+  if (!req.user) {
+    return next(new AppError("UNAUTHORIZED", "Authentication required", 401));
+  }
+
   const metadata = (req.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const appMetadata = (req.user?.app_metadata ?? {}) as Record<string, unknown>;
   const isAdminByMetadata =
     metadata.isAdmin === true ||
     metadata.is_admin === true ||
-    metadata.role === "admin";
+    metadata.role === "admin" ||
+    appMetadata.role === "admin";
 
   if (isAdminByMetadata) {
     req.admin = true;

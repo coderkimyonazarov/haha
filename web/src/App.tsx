@@ -134,11 +134,11 @@ function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div ref={shellRef} className="relative min-h-screen overflow-x-clip bg-background transition-colors duration-500">
-      <div className="pointer-events-none absolute inset-0 -z-10 brand-noise opacity-[0.16]" aria-hidden />
+    <div ref={shellRef} className="admin-cosmos relative min-h-screen overflow-x-clip text-slate-100 transition-colors duration-500">
+      <div className="pointer-events-none absolute inset-0 -z-10 brand-noise opacity-[0.1]" aria-hidden />
 
       <header
-        className="sticky top-0 z-30 border-b border-border/70 bg-background/88 backdrop-blur-xl"
+        className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl"
         data-shell="nav"
       >
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -146,26 +146,30 @@ function Layout({ children }: { children: React.ReactNode }) {
             <img
               src="/brand/sypev-logo.png"
               alt="Sypev logo"
-              className="h-8 w-auto rounded-md border border-border/60 bg-white px-1.5 py-1 sm:h-9"
+              className="h-8 w-auto rounded-md border border-white/25 bg-white px-1.5 py-1 sm:h-9"
               loading="lazy"
             />
-            <span className="text-base font-semibold tracking-tight sm:text-lg">Sypev</span>
+            <span className="text-base font-semibold tracking-tight text-slate-100 sm:text-lg">Sypev</span>
           </Link>
 
           {user ? (
             <>
               <nav className="hidden items-center gap-1.5 text-sm font-medium xl:flex">
                 {navLinks.map((item) => (
-                  <Link key={item.to} to={item.to} className="rounded-full px-3 py-1.5 hover:bg-muted/80">
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-slate-200 transition hover:border-cyan-200/35 hover:bg-cyan-300/10"
+                  >
                     {item.label}
                   </Link>
                 ))}
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={handleThemeCycle}
                   disabled={themeUpdating || !preferences}
-                  className="gap-2"
+                  className="gap-2 border border-white/15 bg-white/[0.04] text-slate-100 hover:bg-cyan-300/10"
                 >
                   {modeIcon}
                   <span className="capitalize">{preferences?.theme ?? "mode"}</span>
@@ -173,31 +177,36 @@ function Layout({ children }: { children: React.ReactNode }) {
                 {user.isAdmin === 1 ? (
                   <Link
                     to="/admin"
-                    className="rounded-full border border-border/70 bg-card px-3 py-1.5 font-semibold"
+                    className="rounded-full border border-indigo-200/35 bg-indigo-400/15 px-3 py-1.5 font-semibold text-indigo-100"
                   >
                     Admin
                   </Link>
                 ) : null}
-                <Button variant="outline" size="sm" onClick={logout}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  className="border border-white/15 bg-white/[0.04] text-slate-100 hover:bg-cyan-300/10"
+                >
                   Log out
                 </Button>
               </nav>
 
               <div className="flex items-center gap-2 xl:hidden">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={handleThemeCycle}
                   disabled={themeUpdating || !preferences}
-                  className="h-9 w-9 rounded-full p-0"
+                  className="h-9 w-9 rounded-full border border-white/20 bg-white/[0.04] p-0 text-slate-100"
                   aria-label="Toggle theme mode"
                 >
                   {modeIcon}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  className="h-9 w-9 rounded-full p-0"
+                  className="h-9 w-9 rounded-full border border-white/20 bg-white/[0.04] p-0 text-slate-100"
                   onClick={() => setMobileMenuOpen((prev) => !prev)}
                   aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
                 >
@@ -207,10 +216,10 @@ function Layout({ children }: { children: React.ReactNode }) {
             </>
           ) : (
             <nav className="flex items-center gap-3">
-              <Link to="/login" className="text-sm font-medium hover:text-foreground">
+              <Link to="/login" className="text-sm font-medium text-slate-200 transition hover:text-cyan-100">
                 Log in
               </Link>
-              <Button asChild size="sm">
+              <Button asChild size="sm" className="border border-cyan-300/40 bg-cyan-300/10 text-slate-100 hover:bg-cyan-300/20">
                 <Link to="/register">Register</Link>
               </Button>
             </nav>
@@ -218,13 +227,13 @@ function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         {user && mobileMenuOpen ? (
-          <div className="border-t border-border/60 bg-background/95 px-4 py-3 xl:hidden">
+          <div className="border-t border-white/10 bg-slate-950/85 px-4 py-3 xl:hidden">
             <div className="mx-auto grid w-full max-w-7xl gap-2 sm:grid-cols-2">
               {navLinks.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="rounded-xl border border-border/60 bg-card/60 px-3 py-2 text-sm font-medium hover:bg-card"
+                  className="rounded-xl border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-slate-100 hover:bg-cyan-300/10"
                 >
                   {item.label}
                 </Link>
@@ -232,12 +241,17 @@ function Layout({ children }: { children: React.ReactNode }) {
               {user.isAdmin === 1 ? (
                 <Link
                   to="/admin"
-                  className="rounded-xl border border-border/60 bg-card/60 px-3 py-2 text-sm font-semibold hover:bg-card"
+                  className="rounded-xl border border-indigo-200/40 bg-indigo-400/15 px-3 py-2 text-sm font-semibold text-indigo-100 hover:bg-indigo-400/25"
                 >
                   Admin
                 </Link>
               ) : null}
-              <Button variant="outline" size="sm" className="justify-start rounded-xl" onClick={logout}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start rounded-xl border border-white/15 bg-white/[0.03] text-slate-100 hover:bg-cyan-300/10"
+                onClick={logout}
+              >
                 Log out
               </Button>
             </div>
@@ -247,17 +261,17 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:py-10">{children}</main>
 
-      <footer className="border-t border-border/60 py-6">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 text-xs text-muted-foreground sm:px-6">
+      <footer className="border-t border-white/10 bg-slate-950/55 py-6">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 text-xs text-slate-300/85 sm:px-6">
           <p>© {new Date().getFullYear()} Sypev. Precision SAT & admissions platform.</p>
           <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="hover:text-foreground">
+            <Link to="/dashboard" className="transition hover:text-cyan-100">
               Dashboard
             </Link>
-            <Link to="/tutor" className="hover:text-foreground">
+            <Link to="/tutor" className="transition hover:text-cyan-100">
               AI Tutor
             </Link>
-            <Link to="/account" className="hover:text-foreground">
+            <Link to="/account" className="transition hover:text-cyan-100">
               Settings
             </Link>
           </div>

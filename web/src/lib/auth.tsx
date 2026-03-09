@@ -58,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const data = await api.me();
-      if (data && data.user) {
+      const currentUser = data.user;
+      if (currentUser) {
         if (data.preferences) {
           applyTheme(
             normalizeThemeRuntime({
@@ -73,17 +74,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setState((s) => ({
           ...s,
-          user: data.user,
+          user: currentUser,
           profile: data.profile,
-          needsUsername: Boolean(data.user.needsUsername),
-          preferences: data.preferences || null,
-          providers: data.providers || [],
+          needsUsername: Boolean(currentUser.needsUsername),
+          preferences: data.preferences,
+          providers: data.providers,
           loading: false,
         }));
       } else {
-        setState((s) => ({ ...s, user: null, loading: false }));
+        setState((s) => ({
+          ...s,
+          user: null,
+          profile: null,
+          needsUsername: false,
+          preferences: null,
+          providers: [],
+          loading: false,
+        }));
       }
-    } catch {
+    } catch (error: any) {
+      if (error?.status === 401 || error?.code === "UNAUTHORIZED") {
+        clearCustomAccessToken();
+      }
       setState((s) => ({
         ...s,
         user: null,

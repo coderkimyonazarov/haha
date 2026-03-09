@@ -8,8 +8,9 @@ import { getDb, getDbConfigStatus, isDatabaseHealthy } from "../db";
 import { linkedIdentities, studentProfiles, userPreferences } from "../db/schema";
 import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
 import { getSupabaseAdmin, getSupabaseAnon, getSupabaseConfigStatus } from "../utils/supabase";
-import { AppError } from "../utils/error";
+import { AppError, toSuccessEnvelope } from "../utils/error";
 import { authLimiter, authReadLimiter } from "../middleware/rateLimit";
+import { getAdminCookieName } from "../middleware/auth";
 import { parseWithSchema } from "../utils/validation";
 import {
   registerSchema,
@@ -61,6 +62,22 @@ type PreferencesShape = {
   onboardingDone: boolean;
   funCardEnabled: boolean;
   updatedAt?: Date | null;
+};
+
+type MeEnvelopeData = {
+  user: {
+    id: string;
+    email: string | null;
+    username: string | null;
+    name: string;
+    isAdmin: number;
+    isVerified: number;
+    needsUsername: boolean;
+    needsOnboarding: boolean;
+  } | null;
+  profile: (Record<string, unknown> & { interests?: string[] }) | null;
+  preferences: (PreferencesShape & { onboardingDone: boolean }) | null;
+  providers: Array<{ provider: string; linkedAt: number }>;
 };
 
 const DEFAULT_PREFERENCES: Omit<PreferencesShape, "userId"> = {
@@ -1661,7 +1678,13 @@ router.get("/me", async (req, res, next) => {
   try {
     const requestId = ((req as { id?: string }).id ?? "unknown").toString();
     if (!req.user) {
-      return res.json({ ok: true, data: { user: null } });
+      const anonymousPayload: MeEnvelopeData = {
+        user: null,
+        profile: null,
+        preferences: null,
+        providers: [],
+      };
+      return res.json(toSuccessEnvelope(anonymousPayload));
     }
 
     let profileRows: any[] = [];
@@ -1725,9 +1748,8 @@ router.get("/me", async (req, res, next) => {
     const onboardingByProfile = profileHasCompletedOnboarding(profile);
     const onboardingDone = Boolean(preferences.onboardingDone && onboardingByProfile);
 
-    return res.json({
-      ok: true,
-      data: {
+    return res.json(
+      toSuccessEnvelope<MeEnvelopeData>({
         user: {
           id: req.user.id,
           email: req.user.email ?? null,
@@ -1755,8 +1777,8 @@ router.get("/me", async (req, res, next) => {
           provider,
           linkedAt,
         })),
-      },
-    });
+      }),
+    );
   } catch (error) {
     next(error);
   }
@@ -1836,13 +1858,19 @@ router.post("/admin-login", authLimiter, async (req, res, next) => {
       username === configuredUsername &&
       passwordMatches
     ) {
-      res.cookie("sypev_admin", "true", {
+      const isSecure = isProduction;
+      const sameSite: "lax" | "none" = isSecure ? "none" : "lax";
+      const cookieDomain = process.env.ADMIN_COOKIE_DOMAIN?.trim() || undefined;
+
+      res.cookie(getAdminCookieName(), "true", {
         httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? "none" : "lax",
+        secure: isSecure,
+        sameSite,
+        domain: cookieDomain,
+        path: "/",
         maxAge: 1000 * 60 * 60 * 24 * 7,
       });
-      return res.json({ ok: true, data: { admin: true } });
+      return res.json(toSuccessEnvelope({ admin: true }));
     }
     throw new AppError("UNAUTHORIZED", "Invalid admin credentials", 401);
   } catch (error) {
@@ -1853,12 +1881,18 @@ router.post("/admin-login", authLimiter, async (req, res, next) => {
 router.post("/admin-logout", async (_req, res, next) => {
   try {
     const isProduction = process.env.NODE_ENV === "production";
-    res.clearCookie("sypev_admin", {
+    const isSecure = isProduction;
+    const sameSite: "lax" | "none" = isSecure ? "none" : "lax";
+    const cookieDomain = process.env.ADMIN_COOKIE_DOMAIN?.trim() || undefined;
+
+    res.clearCookie(getAdminCookieName(), {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? "none" : "lax",
+      secure: isSecure,
+      sameSite,
+      domain: cookieDomain,
+      path: "/",
     });
-    res.json({ ok: true, data: { loggedOut: true } });
+    res.json(toSuccessEnvelope({ loggedOut: true }));
   } catch (error) {
     next(error);
   }
@@ -1866,11 +1900,11 @@ router.post("/admin-logout", async (_req, res, next) => {
 
 router.get("/admin-me", async (req, res, next) => {
   try {
-    const adminCookie = req.cookies?.sypev_admin;
+    const adminCookie = req.cookies?.[getAdminCookieName()];
     if (adminCookie === "true" || hasAdminPrivileges(req.user)) {
-      return res.json({ ok: true, data: { admin: true } });
+      return res.json(toSuccessEnvelope({ admin: true }));
     }
-    return res.json({ ok: true, data: { admin: false } });
+    return res.json(toSuccessEnvelope({ admin: false }));
   } catch (error) {
     next(error);
   }

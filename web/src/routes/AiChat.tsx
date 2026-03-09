@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
+import { Bot, Sparkles } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -75,29 +76,29 @@ export default function AiChat() {
 
   return (
     <Page className="mx-auto flex min-h-[calc(100dvh-250px)] max-w-5xl flex-col">
-      <div className="mb-5 space-y-1" data-animate="fade">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">AI Counselor</h1>
-        <p className="text-muted-foreground text-sm">
+      <section className="cosmos-hero mb-5 p-6 sm:p-7" data-animate="fade">
+        <h1 className="inline-flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-100 sm:text-3xl"><Bot className="h-6 w-6 text-indigo-200" />AI Counselor</h1>
+        <p className="mt-1 text-sm text-slate-300/80">
           Personalized guidance for your academic journey.
         </p>
-      </div>
+      </section>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <Card className="relative flex flex-1 flex-col overflow-hidden border-2 bg-card/60 shadow-xl">
+        <Card className="cosmos-panel relative flex flex-1 flex-col overflow-hidden border-2 shadow-xl">
           <div
             ref={scrollRef}
             className="flex-1 space-y-5 overflow-y-auto p-4 scroll-smooth sm:p-6"
           >
             {history.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center space-y-4 px-2 text-center opacity-65">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">
-                  ✨
+              <div className="flex h-full flex-col items-center justify-center space-y-4 px-2 text-center opacity-85">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-indigo-400/15 text-indigo-100">
+                  <Sparkles className="h-6 w-6" />
                 </div>
                 <div className="max-w-xs">
-                  <p className="font-semibold text-foreground">
+                  <p className="font-semibold text-slate-100">
                     How can I help you today?
                   </p>
-                  <p className="text-sm">
+                  <p className="text-sm text-slate-300/80">
                     Ask about SAT prep strategies, college admissions, or
                     specific universities.
                   </p>
@@ -113,8 +114,8 @@ export default function AiChat() {
                   <div
                     className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm transition-all sm:max-w-[85%] ${
                       msg.role === "user"
-                        ? "bg-primary text-primary-foreground rounded-tr-none"
-                        : "bg-muted/80 backdrop-blur-sm border border-border/50 rounded-tl-none"
+                        ? "rounded-tr-none border border-cyan-200/25 bg-cyan-400/18 text-slate-100"
+                        : "rounded-tl-none border border-white/15 bg-slate-900/75 text-slate-100"
                     }`}
                   >
                     <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
@@ -124,21 +125,21 @@ export default function AiChat() {
             )}
             {loading && (
               <div className="flex justify-start" data-animate="fade">
-                <div className="bg-muted/80 rounded-2xl rounded-tl-none px-4 py-3 flex gap-1 items-center border border-border/50">
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
+                <div className="flex items-center gap-1 rounded-2xl rounded-tl-none border border-white/15 bg-slate-900/75 px-4 py-3">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-200 [animation-delay:-0.3s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-200 [animation-delay:-0.15s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-200" />
                 </div>
               </div>
             )}
           </div>
         </Card>
 
-        <Card className="border-2 p-3 shadow-lg sm:p-4">
+        <Card className="cosmos-panel border-2 p-3 shadow-lg sm:p-4">
           <form onSubmit={send} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-[150px_1fr]">
               <Select value={context} onValueChange={(v: any) => setContext(v)}>
-                <SelectTrigger className="h-10 w-full text-xs">
+                <SelectTrigger className="admin-input h-10 w-full border-white/20 bg-slate-900/65 text-xs text-slate-100">
                   <SelectValue placeholder="Context" />
                 </SelectTrigger>
                 <SelectContent>
@@ -153,7 +154,7 @@ export default function AiChat() {
                   setUniversityId(v === "none" ? undefined : v)
                 }
               >
-                <SelectTrigger className="h-10 w-full text-xs">
+                <SelectTrigger className="admin-input h-10 w-full border-white/20 bg-slate-900/65 text-xs text-slate-100">
                   <SelectValue placeholder="Target University (Optional)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -178,13 +179,13 @@ export default function AiChat() {
                   }
                 }}
                 placeholder="Message AI Counselor..."
-                className="min-h-[44px] max-h-36 resize-none border-none bg-muted/30 py-3 text-sm focus-visible:ring-primary"
+                className="admin-input min-h-[44px] max-h-36 resize-none border-white/20 bg-slate-900/65 py-3 text-sm text-slate-100"
                 rows={1}
               />
               <Button
                 type="submit"
                 disabled={loading || !message.trim()}
-                className="h-[44px] w-[44px] shrink-0 rounded-xl"
+                className="h-[44px] w-[44px] shrink-0 rounded-xl border border-cyan-300/35 bg-cyan-400/15 text-slate-100 hover:bg-cyan-400/25"
               >
                 {loading ? "..." : "↑"}
               </Button>

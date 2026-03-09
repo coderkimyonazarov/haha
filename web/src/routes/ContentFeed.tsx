@@ -104,15 +104,15 @@ export default function ContentFeed() {
 
   return (
     <Page className="space-y-12 pb-24">
-      <header data-animate="fade" className="max-w-2xl">
-        <div className="flex items-center gap-2 text-primary font-bold tracking-widest uppercase text-xs mb-3">
+      <header data-animate="fade" className="cosmos-hero max-w-4xl p-6 sm:p-8">
+        <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-cyan-100">
           <Sparkles className="w-4 h-4" />
           Personalized for you
         </div>
-        <h1 className="text-5xl font-extrabold tracking-tight mb-4">
-          Discovery <span className="text-primary">Feed</span>
+        <h1 className="mb-4 text-5xl font-extrabold tracking-tight text-slate-100">
+          Discovery <span className="admin-glow-text">Feed</span>
         </h1>
-        <p className="text-muted-foreground text-xl leading-relaxed">
+        <p className="text-xl leading-relaxed text-slate-300/80">
           Curated intelligence for your academic journey, styled specifically for
           your <b>{vibe}</b> vibe.
         </p>
@@ -121,7 +121,7 @@ export default function ContentFeed() {
       <div className={getContainerStyles()}>
         {/* Dynamic Vibe demonstration blocks */}
         {vibe === "minimal" && (
-          <div className="lg:col-span-4 bg-muted/30 p-8 rounded-2xl flex items-center justify-between border">
+          <div className="cosmos-panel lg:col-span-4 flex items-center justify-between p-8">
             <div className="flex gap-8">
               <div className="flex flex-col">
                 <span className="text-2xl font-bold">142</span>
@@ -143,7 +143,7 @@ export default function ContentFeed() {
         {ITEMS.map((item, idx) => (
           <div
             key={item.id}
-            className={getCardStyles()}
+            className={`${getCardStyles()} cosmos-panel`}
             style={{ transitionDelay: `${idx * 100}ms` }}
             data-animate="card"
           >

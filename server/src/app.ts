@@ -91,7 +91,8 @@ function isLocalOrigin(origin: string): boolean {
 function isPublicCorsPath(pathname: string): boolean {
   return (
     pathname === "/api/auth/health-auth" ||
-    pathname === "/api/auth/telegram/config"
+    pathname === "/api/auth/telegram/config" ||
+    pathname === "/api/auth/admin-me"
   );
 }
 
@@ -111,20 +112,25 @@ function isAllowedOrigin(origin: string): boolean {
 app.use(
   cors((req, callback) => {
     const origin = req.header("origin");
+    const corsConfig = {
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "x-custom-auth",
+        "sypev-admin",
+        "x-bot-secret",
+        "x-requested-with",
+      ],
+      exposedHeaders: ["x-request-id"],
+      optionsSuccessStatus: 204,
+    } as const;
 
     if (!origin) {
       return callback(null, {
+        ...corsConfig,
         origin: true,
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-          "Content-Type",
-          "Authorization",
-          "x-custom-auth",
-          "sypev-admin",
-          "x-bot-secret",
-          "x-requested-with",
-        ],
       });
     }
 
@@ -135,31 +141,13 @@ app.use(
         (isPublicCorsPath(req.path) && /^https?:\/\//i.test(origin));
 
       return callback(null, {
+        ...corsConfig,
         origin: allowThisOrigin ? origin : false,
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-          "Content-Type",
-          "Authorization",
-          "x-custom-auth",
-          "sypev-admin",
-          "x-bot-secret",
-          "x-requested-with",
-        ],
       });
     } catch {
       return callback(null, {
+        ...corsConfig,
         origin: false,
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-          "Content-Type",
-          "Authorization",
-          "x-custom-auth",
-          "sypev-admin",
-          "x-bot-secret",
-          "x-requested-with",
-        ],
       });
     }
   }),

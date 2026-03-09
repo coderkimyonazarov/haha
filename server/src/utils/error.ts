@@ -11,13 +11,51 @@ export class AppError extends Error {
   }
 }
 
-export function toErrorEnvelope(err: AppError) {
+export type ErrorEnvelope = {
+  ok: false;
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+};
+
+export type SuccessEnvelope<T> = {
+  ok: true;
+  data: T;
+};
+
+export type ApiEnvelope<T> = SuccessEnvelope<T> | ErrorEnvelope;
+
+export function toSuccessEnvelope<T>(data: T): SuccessEnvelope<T> {
+  return {
+    ok: true,
+    data,
+  };
+}
+
+export function toErrorEnvelope(err: unknown): ErrorEnvelope {
+  if (err instanceof AppError) {
+    const error: ErrorEnvelope["error"] = {
+      code: err.code,
+      message: err.message,
+    };
+
+    if (err.details !== undefined) {
+      error.details = err.details;
+    }
+
+    return {
+      ok: false,
+      error,
+    };
+  }
+
   return {
     ok: false,
     error: {
-      code: err.code,
-      message: err.message,
-      details: err.details
-    }
+      code: "INTERNAL_ERROR",
+      message: "Unexpected error",
+    },
   };
 }
