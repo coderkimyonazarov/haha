@@ -231,8 +231,8 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 pb-20">
-      <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card/70 p-6 sm:p-8">
+    <div className="mx-auto max-w-5xl space-y-6 pb-14 sm:space-y-8 sm:pb-20">
+      <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card/70 p-4 sm:p-6 lg:p-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.14),transparent_55%)]" />
         <div className="relative z-10 space-y-5">
           <div className="flex items-center justify-between gap-4">
@@ -240,7 +240,12 @@ export default function Onboarding() {
               <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
                 Setup Profile
               </p>
-              <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Build your personalized workspace</h1>
+              <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                Build your personalized workspace
+              </h1>
+              <div className="mt-2 inline-flex rounded-full border border-border/70 bg-background/80 px-3 py-1 text-xs font-semibold sm:hidden">
+                Step {step + 1} / {STEPS.length}
+              </div>
             </div>
             <div className="hidden items-center gap-3 sm:flex">
               <BrandMotionLogo className="w-28" decorative />
@@ -272,7 +277,7 @@ export default function Onboarding() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-border/70 bg-card/70 p-5 sm:p-8">
+      <section className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6 lg:p-8">
         <div key={step} className="space-y-6 animate-[fadeIn_220ms_ease-out]">
             {step === 0 && (
               <div className="space-y-5">
@@ -464,7 +469,7 @@ export default function Onboarding() {
                     Confirm your onboarding profile before entering dashboard.
                   </p>
                 </div>
-                <div className="grid gap-4 rounded-3xl border border-border/70 bg-background/60 p-5 sm:grid-cols-2">
+                <div className="grid gap-4 rounded-3xl border border-border/70 bg-background/60 p-4 sm:grid-cols-2 sm:p-5">
                   <div className="space-y-3">
                     <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                       Identity
@@ -510,7 +515,7 @@ export default function Onboarding() {
             )}
         </div>
 
-        <div className="mt-8 flex items-center justify-between gap-3 border-t border-border/70 pt-5">
+        <div className="mt-8 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-border/70 pt-5 sm:flex-row sm:items-center">
           <Button type="button" variant="ghost" onClick={handleBack} disabled={step === 0 || saving}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back

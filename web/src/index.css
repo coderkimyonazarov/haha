@@ -139,6 +139,8 @@
     background-image: radial-gradient(circle at 10% 0%, hsl(var(--foreground) / 0.02), transparent 38%),
       radial-gradient(circle at 100% 100%, hsl(var(--foreground) / 0.03), transparent 42%);
     font-family: var(--font-body);
+    min-height: 100dvh;
+    text-wrap: pretty;
   }
 
   h1,
@@ -159,12 +161,12 @@
 
 .glass-panel {
   @apply border border-border/60 bg-card/85 backdrop-blur-xl;
-  box-shadow: 0 18px 48px -32px hsl(var(--foreground) / 0.28);
+  box-shadow: 0 18px 48px -32px hsl(var(--foreground) / 0.24);
 }
 
 .brand-frame {
   @apply rounded-3xl border border-border/70 bg-card/85 backdrop-blur;
-  box-shadow: 0 22px 52px -36px hsl(var(--foreground) / 0.24);
+  box-shadow: 0 20px 50px -36px hsl(var(--foreground) / 0.22);
 }
 
 .brand-noise {
@@ -180,5 +182,15 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .glass-panel {
+    box-shadow: 0 14px 32px -26px hsl(var(--foreground) / 0.2);
+  }
+
+  .brand-frame {
+    box-shadow: 0 16px 36px -28px hsl(var(--foreground) / 0.2);
   }
 }

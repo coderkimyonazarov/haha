@@ -1,7 +1,7 @@
 import { gsap } from "gsap";
 import React from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { Moon, Monitor, Sun } from "lucide-react";
+import { Menu, Moon, Monitor, Sun, X } from "lucide-react";
 
 import { Button } from "./components/ui/button";
 import BrandSplash from "./components/BrandSplash";
@@ -78,8 +78,10 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
 
 function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, preferences, refresh } = useAuth();
+  const location = useLocation();
   const shellRef = React.useRef<HTMLDivElement>(null);
   const [themeUpdating, setThemeUpdating] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   React.useLayoutEffect(() => {
     if (!shellRef.current) return;
@@ -117,70 +119,92 @@ function Layout({ children }: { children: React.ReactNode }) {
       <Monitor className="h-4 w-4" />
     );
 
+  React.useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname, user?.id]);
+
+  const navLinks = [
+    { to: "/dashboard", label: "Dashboard" },
+    { to: "/study/sat", label: "SAT Study" },
+    { to: "/admissions", label: "Admissions" },
+    { to: "/universities", label: "Universities" },
+    { to: "/tutor", label: "AI Counselor" },
+    { to: "/feed", label: "Discovery" },
+    { to: "/account", label: "Account" },
+  ];
+
   return (
-    <div ref={shellRef} className="relative min-h-screen transition-colors duration-500 bg-background">
+    <div ref={shellRef} className="relative min-h-screen overflow-x-clip bg-background transition-colors duration-500">
       <div className="pointer-events-none absolute inset-0 -z-10 brand-noise opacity-[0.16]" aria-hidden />
 
       <header
-        className="sticky top-0 z-20 border-b border-border/70 bg-background/84 backdrop-blur-xl"
+        className="sticky top-0 z-30 border-b border-border/70 bg-background/88 backdrop-blur-xl"
         data-shell="nav"
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link to="/dashboard" className="flex items-center gap-3">
             <img
               src="/brand/sypev-logo.png"
               alt="Sypev logo"
-              className="h-9 w-auto rounded-md border border-border/60 bg-white px-1.5 py-1"
+              className="h-8 w-auto rounded-md border border-border/60 bg-white px-1.5 py-1 sm:h-9"
               loading="lazy"
             />
-            <span className="text-lg font-semibold tracking-tight">Sypev</span>
+            <span className="text-base font-semibold tracking-tight sm:text-lg">Sypev</span>
           </Link>
 
           {user ? (
-            <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
-              <Link to="/dashboard" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                Dashboard
-              </Link>
-              <Link to="/study/sat" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                SAT Study
-              </Link>
-              <Link to="/admissions" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                Admissions
-              </Link>
-              <Link to="/universities" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                Universities
-              </Link>
-              <Link to="/tutor" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                AI Counselor
-              </Link>
-              <Link to="/feed" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                Discovery
-              </Link>
-              <Link to="/account" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
-                Account
-              </Link>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleThemeCycle}
-                disabled={themeUpdating || !preferences}
-                className="gap-2"
-              >
-                {modeIcon}
-                <span className="capitalize">{preferences?.theme ?? "mode"}</span>
-              </Button>
-              {user.isAdmin === 1 && (
-                <Link
-                  to="/admin"
-                  className="rounded-full border border-border/70 bg-card px-3 py-1.5 font-semibold"
+            <>
+              <nav className="hidden items-center gap-1.5 text-sm font-medium xl:flex">
+                {navLinks.map((item) => (
+                  <Link key={item.to} to={item.to} className="rounded-full px-3 py-1.5 hover:bg-muted/80">
+                    {item.label}
+                  </Link>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleThemeCycle}
+                  disabled={themeUpdating || !preferences}
+                  className="gap-2"
                 >
-                  Admin
-                </Link>
-              )}
-              <Button variant="outline" size="sm" onClick={logout}>
-                Log out
-              </Button>
-            </nav>
+                  {modeIcon}
+                  <span className="capitalize">{preferences?.theme ?? "mode"}</span>
+                </Button>
+                {user.isAdmin === 1 ? (
+                  <Link
+                    to="/admin"
+                    className="rounded-full border border-border/70 bg-card px-3 py-1.5 font-semibold"
+                  >
+                    Admin
+                  </Link>
+                ) : null}
+                <Button variant="outline" size="sm" onClick={logout}>
+                  Log out
+                </Button>
+              </nav>
+
+              <div className="flex items-center gap-2 xl:hidden">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleThemeCycle}
+                  disabled={themeUpdating || !preferences}
+                  className="h-9 w-9 rounded-full p-0"
+                  aria-label="Toggle theme mode"
+                >
+                  {modeIcon}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 w-9 rounded-full p-0"
+                  onClick={() => setMobileMenuOpen((prev) => !prev)}
+                  aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                >
+                  {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                </Button>
+              </div>
+            </>
           ) : (
             <nav className="flex items-center gap-3">
               <Link to="/login" className="text-sm font-medium hover:text-foreground">
@@ -192,12 +216,39 @@ function Layout({ children }: { children: React.ReactNode }) {
             </nav>
           )}
         </div>
+
+        {user && mobileMenuOpen ? (
+          <div className="border-t border-border/60 bg-background/95 px-4 py-3 xl:hidden">
+            <div className="mx-auto grid w-full max-w-7xl gap-2 sm:grid-cols-2">
+              {navLinks.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className="rounded-xl border border-border/60 bg-card/60 px-3 py-2 text-sm font-medium hover:bg-card"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {user.isAdmin === 1 ? (
+                <Link
+                  to="/admin"
+                  className="rounded-xl border border-border/60 bg-card/60 px-3 py-2 text-sm font-semibold hover:bg-card"
+                >
+                  Admin
+                </Link>
+              ) : null}
+              <Button variant="outline" size="sm" className="justify-start rounded-xl" onClick={logout}>
+                Log out
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:py-10">{children}</main>
 
       <footer className="border-t border-border/60 py-6">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 text-xs text-muted-foreground">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 text-xs text-muted-foreground sm:px-6">
           <p>© {new Date().getFullYear()} Sypev. Precision SAT & admissions platform.</p>
           <div className="flex items-center gap-3">
             <Link to="/dashboard" className="hover:text-foreground">

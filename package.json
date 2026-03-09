@@ -2,16 +2,20 @@
   "name": "sypev",
   "private": true,
   "workspaces": [
+    "bot",
     "server",
     "web",
     "shared"
   ],
   "scripts": {
-    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\" \"npm:dev:bot\"",
     "dev:server": "npm --workspace server run dev",
     "dev:web": "npm --workspace web run dev",
-    "build": "npm --workspace server run build && npm --workspace web run build",
-    "start": "npm --workspace server run start",
+    "dev:bot": "node -e \"const fs=require('fs');const env=fs.existsSync('bot/.env')?fs.readFileSync('bot/.env','utf8'):'';const has=(k)=>Boolean(process.env[k])||new RegExp('^'+k+'=.+','m').test(env);process.exit(has('BOT_TOKEN')&&has('BOT_INTERNAL_API_KEY')?0:1)\" && npm --workspace bot run dev || echo \"[dev:bot] skipped: set BOT_TOKEN and BOT_INTERNAL_API_KEY in bot/.env\"",
+    "build": "npm --workspace server run build && npm --workspace web run build && npm --workspace bot run build",
+    "start": "concurrently -k \"npm:start:server\" \"npm:start:bot\"",
+    "start:server": "npm --workspace server run start",
+    "start:bot": "npm --workspace bot run start",
     "test": "npm --workspace server run test"
   },
   "dependencies": {

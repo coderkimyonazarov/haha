@@ -2,7 +2,7 @@ import React from "react";
 import { aiTutor, listUniversities } from "../api";
 import Page from "../components/Page";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
+import { Card } from "../components/ui/card";
 import {
   Select,
   SelectContent,
@@ -11,7 +11,6 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Textarea } from "../components/ui/textarea";
-import { useAuth } from "../lib/auth";
 
 interface Message {
   role: "user" | "assistant";
@@ -19,7 +18,6 @@ interface Message {
 }
 
 export default function AiChat() {
-  const { user } = useAuth();
   const [message, setMessage] = React.useState("");
   const [context, setContext] = React.useState<"SAT" | "Admissions">("SAT");
   const [loading, setLoading] = React.useState(false);
@@ -76,24 +74,23 @@ export default function AiChat() {
   };
 
   return (
-    <Page className="flex flex-col h-[calc(100vh-140px)] max-w-4xl mx-auto">
-      <div className="mb-6 space-y-1" data-animate="fade">
-        <h1 className="text-3xl font-bold tracking-tight">AI Counselor</h1>
+    <Page className="mx-auto flex min-h-[calc(100dvh-250px)] max-w-5xl flex-col">
+      <div className="mb-5 space-y-1" data-animate="fade">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">AI Counselor</h1>
         <p className="text-muted-foreground text-sm">
           Personalized guidance for your academic journey.
         </p>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col gap-4">
-        {/* Chat window */}
-        <Card className="flex-1 overflow-hidden flex flex-col border-2 relative bg-card/50 backdrop-blur-sm shadow-xl">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <Card className="relative flex flex-1 flex-col overflow-hidden border-2 bg-card/60 shadow-xl">
           <div
             ref={scrollRef}
-            className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
+            className="flex-1 space-y-5 overflow-y-auto p-4 scroll-smooth sm:p-6"
           >
             {history.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary text-2xl">
+              <div className="flex h-full flex-col items-center justify-center space-y-4 px-2 text-center opacity-65">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">
                   ✨
                 </div>
                 <div className="max-w-xs">
@@ -114,7 +111,7 @@ export default function AiChat() {
                   data-animate="fade"
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm transition-all ${
+                    className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm shadow-sm transition-all sm:max-w-[85%] ${
                       msg.role === "user"
                         ? "bg-primary text-primary-foreground rounded-tr-none"
                         : "bg-muted/80 backdrop-blur-sm border border-border/50 rounded-tl-none"
@@ -137,12 +134,11 @@ export default function AiChat() {
           </div>
         </Card>
 
-        {/* Controls */}
-        <Card className="border-2 p-4 shadow-lg">
+        <Card className="border-2 p-3 shadow-lg sm:p-4">
           <form onSubmit={send} className="space-y-4">
-            <div className="flex flex-wrap gap-3">
+            <div className="grid gap-3 sm:grid-cols-[150px_1fr]">
               <Select value={context} onValueChange={(v: any) => setContext(v)}>
-                <SelectTrigger className="w-[140px] h-9 text-xs">
+                <SelectTrigger className="h-10 w-full text-xs">
                   <SelectValue placeholder="Context" />
                 </SelectTrigger>
                 <SelectContent>
@@ -157,7 +153,7 @@ export default function AiChat() {
                   setUniversityId(v === "none" ? undefined : v)
                 }
               >
-                <SelectTrigger className="flex-1 h-9 text-xs">
+                <SelectTrigger className="h-10 w-full text-xs">
                   <SelectValue placeholder="Target University (Optional)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -182,7 +178,7 @@ export default function AiChat() {
                   }
                 }}
                 placeholder="Message AI Counselor..."
-                className="min-h-[44px] max-h-32 resize-none bg-muted/30 focus-visible:ring-primary border-none text-sm py-3"
+                className="min-h-[44px] max-h-36 resize-none border-none bg-muted/30 py-3 text-sm focus-visible:ring-primary"
                 rows={1}
               />
               <Button

@@ -55,12 +55,12 @@ export default function Dashboard() {
   const telegramLinked = Boolean(providers.find((provider) => provider.provider === "telegram"));
 
   return (
-    <div className="space-y-8 pb-20">
-      <section className="brand-frame overflow-hidden p-6 sm:p-8">
+    <div className="space-y-6 pb-14 sm:space-y-8 sm:pb-20">
+      <section className="brand-frame overflow-hidden p-4 sm:p-6 lg:p-8">
         <div className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Sypev Workspace</p>
-            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
               Welcome back, <span className="text-foreground">{firstName}</span>
             </h1>
             <p className="max-w-xl text-base text-muted-foreground">
@@ -126,7 +126,7 @@ export default function Dashboard() {
       <section className="grid gap-4 md:grid-cols-3">
         <Link
           to="/study/sat"
-          className="rounded-2xl border border-border/70 bg-card/80 p-5 transition-colors hover:border-foreground/30"
+          className="rounded-2xl border border-border/70 bg-card/80 p-4 transition-colors hover:border-foreground/30 sm:p-5"
         >
           <BookOpen className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">SAT Engine</h3>
@@ -137,7 +137,7 @@ export default function Dashboard() {
 
         <Link
           to="/admissions"
-          className="rounded-2xl border border-border/70 bg-card/80 p-5 transition-colors hover:border-foreground/30"
+          className="rounded-2xl border border-border/70 bg-card/80 p-4 transition-colors hover:border-foreground/30 sm:p-5"
         >
           <GraduationCap className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">Admissions Radar</h3>
@@ -148,7 +148,7 @@ export default function Dashboard() {
 
         <Link
           to="/tutor"
-          className="rounded-2xl border border-border/70 bg-card/80 p-5 transition-colors hover:border-foreground/30"
+          className="rounded-2xl border border-border/70 bg-card/80 p-4 transition-colors hover:border-foreground/30 sm:p-5"
         >
           <Brain className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">AI Counselor</h3>
@@ -158,7 +158,7 @@ export default function Dashboard() {
         </Link>
       </section>
 
-      <section className="rounded-2xl border border-border/70 bg-card/80 p-5">
+      <section className="rounded-2xl border border-border/70 bg-card/80 p-4 sm:p-5">
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-foreground" />
           <h3 className="text-lg font-semibold">Current style profile</h3>
@@ -185,7 +185,7 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl border border-border/70 bg-card/85 p-5">
+        <article className="rounded-2xl border border-border/70 bg-card/85 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Rocket className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Yangi funksiyalar</h3>
@@ -201,7 +201,7 @@ export default function Dashboard() {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-border/70 bg-card/85 p-5">
+        <article className="rounded-2xl border border-border/70 bg-card/85 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Aniqlangan xatolar/risklar va tuzatish ishlari</h3>
@@ -213,7 +213,7 @@ export default function Dashboard() {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-border/70 bg-card/85 p-5">
+        <article className="rounded-2xl border border-border/70 bg-card/85 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <Clock3 className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Kelgusi 24 soat ichida bajariladigan ishlar</h3>

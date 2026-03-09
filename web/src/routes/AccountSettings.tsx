@@ -315,25 +315,25 @@ export default function AccountSettings() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-7 pb-20">
-      <section className="rounded-3xl border border-border/70 bg-card/70 p-6">
+    <div className="mx-auto max-w-7xl space-y-6 pb-14 sm:space-y-7 sm:pb-20">
+      <section className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
         <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Account Settings</p>
-        <h1 className="mt-2 text-3xl font-extrabold">Personalization + identity controls</h1>
+        <h1 className="mt-2 text-2xl font-extrabold sm:text-3xl">Personalization + identity controls</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Update your theme/persona, interests, and linked providers without breaking unified account
           mapping.
         </p>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+      <section className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">
         <div className="space-y-5">
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-6">
+          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Palette className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-semibold">Appearance</h2>
             </div>
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
                 {(["light", "dark", "system"] as Theme[]).map((mode) => (
                   <button
                     key={mode}
@@ -394,14 +394,14 @@ export default function AccountSettings() {
                 Enable dashboard fun cards
               </label>
 
-              <Button onClick={handleSaveAppearance} disabled={savingAppearance}>
+              <Button className="w-full sm:w-auto" onClick={handleSaveAppearance} disabled={savingAppearance}>
                 {savingAppearance ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save appearance
               </Button>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-6">
+          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-semibold">Interests</h2>
@@ -422,13 +422,13 @@ export default function AccountSettings() {
                 </button>
               ))}
             </div>
-            <Button className="mt-4" onClick={handleSaveInterests} disabled={savingInterests}>
+            <Button className="mt-4 w-full sm:w-auto" onClick={handleSaveInterests} disabled={savingInterests}>
               {savingInterests ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save interests
             </Button>
           </div>
 
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-6">
+          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <UserRoundPen className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-semibold">Username</h2>
@@ -439,7 +439,7 @@ export default function AccountSettings() {
                 onChange={(event) => setUsernameValue(event.target.value)}
                 placeholder="username"
               />
-              <Button type="submit" disabled={savingUsername}>
+              <Button type="submit" className="sm:min-w-[142px]" disabled={savingUsername}>
                 {savingUsername ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save username
               </Button>
@@ -448,7 +448,7 @@ export default function AccountSettings() {
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-6">
+          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
               <h2 className="text-xl font-semibold">Linked providers</h2>
@@ -476,7 +476,7 @@ export default function AccountSettings() {
                       <div className="mt-2">
                         {provider === "telegram" && !linked ? (
                           telegramInfo?.enabled ? (
-                            <div id="telegram-link-container" className="min-h-11" />
+                            <div id="telegram-link-container" className="min-h-11 overflow-x-auto" />
                           ) : (
                             <p className="text-xs text-muted-foreground">
                               {telegramInfo?.domainMatch === false &&
@@ -522,7 +522,7 @@ export default function AccountSettings() {
             )}
           </div>
 
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-6">
+          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
             <div className="mb-2 flex items-center gap-2">
               <Send className="h-4 w-4 text-primary" />
               <h3 className="font-semibold">Telegram bot</h3>

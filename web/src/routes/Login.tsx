@@ -325,11 +325,11 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex w-full relative overflow-hidden bg-background">
+    <div className="relative w-full overflow-hidden rounded-[2rem] border border-border/60 bg-background/70">
       <div className="absolute inset-0 auth-split-gradient pointer-events-none opacity-40 mix-blend-multiply dark:mix-blend-screen" />
 
-      <div className="flex-1 grid lg:grid-cols-2 relative z-10 w-full max-w-[1400px] mx-auto">
-        <div className="hidden lg:flex flex-col justify-between p-12 pr-20 animate-element">
+      <div className="relative z-10 grid min-h-[calc(100dvh-210px)] w-full lg:grid-cols-2">
+        <div className="hidden lg:flex flex-col justify-between p-10 xl:p-12 animate-element">
           <div>
             <div className="flex items-center gap-3 mb-16">
               <img
@@ -357,8 +357,18 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="flex flex-col justify-center items-center p-6 sm:p-12 relative" ref={containerRef}>
-          <div className="w-full max-w-md glass-panel p-8 sm:p-10 rounded-[2rem]">
+        <div className="flex flex-col justify-center items-center p-4 sm:p-8 lg:p-10 relative" ref={containerRef}>
+          <div className="mb-4 flex w-full max-w-lg items-center justify-center gap-3 rounded-2xl border border-border/60 bg-card/70 p-3 lg:hidden">
+            <img
+              src="/brand/sypev-logo.png"
+              alt="Sypev logo"
+              className="h-8 w-auto rounded-md border border-border/70 bg-background px-2 py-1"
+              loading="lazy"
+            />
+            <span className="text-base font-semibold tracking-tight">Sypev</span>
+          </div>
+
+          <div className="w-full max-w-lg glass-panel p-6 sm:p-8 lg:p-10 rounded-[1.75rem]">
             <div className="mb-8 animate-element">
               <h2 className="text-3xl font-bold tracking-tight mb-2">Sign in</h2>
               <p className="text-muted-foreground text-sm">Enter your details to access your account.</p>
