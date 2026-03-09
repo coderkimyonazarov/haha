@@ -4,7 +4,6 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 
-import { ensureSchema } from "./db";
 import { requestId } from "./middleware/requestId";
 import { authOptional, requireAdmin } from "./middleware/auth";
 import { errorHandler } from "./middleware/errorHandler";
@@ -15,11 +14,9 @@ import accountLinkRouter from "./routes/accountLink";
 import profileRouter from "./routes/profile";
 import universitiesRouter from "./routes/universities";
 import admissionsRouter from "./routes/admissions";
+import satRouter from "./routes/sat";
 import aiRouter from "./routes/ai";
 import adminRouter from "./routes/admin";
-
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
-ensureSchema();
 
 const app = express();
 app.set("trust proxy", 1);
@@ -35,15 +32,21 @@ app.use(
 // ── CORS ──────────────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
-  .map((s) => s.trim());
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const isDev = process.env.NODE_ENV !== "production";
+const isLocalOrigin = (origin: string) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
 
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin) return callback(null, true);
       
-      const isAllowed = 
+      const isAllowed =
         allowedOrigins.includes(origin) ||
+        (isDev && isLocalOrigin(origin)) ||
         origin.endsWith(".vercel.app") ||
         origin === "https://sypev.com" ||
         origin === "https://www.sypev.com" ||
@@ -79,6 +82,7 @@ app.use("/api/account", authOptional, accountLinkRouter);
 app.use("/api/profile", authOptional, profileRouter);
 app.use("/api/universities", authOptional, universitiesRouter);
 app.use("/api/admissions", authOptional, admissionsRouter);
+app.use("/api/sat", authOptional, satRouter);
 app.use("/api/ai", authOptional, aiRouter);
 
 // Admin routes

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { telegramAuth } from "../api";
+import { register, telegramAuth } from "../api";
 import { supabase } from "../lib/supabase";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -8,25 +8,71 @@ import { Label } from "../components/ui/label";
 import { useAuth } from "../lib/auth";
 import {
   getGoogleOAuthErrorMessage,
+  getGoogleOAuthErrorMessageFromUrl,
   getSignupErrorMessage,
+  isAuthRateLimitError,
 } from "../lib/authErrors";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Command } from "lucide-react";
 import gsap from "gsap";
 
+const SIGNUP_COOLDOWN_KEY = "test_bro_signup_cooldown_until";
+const SIGNUP_COOLDOWN_MS = 70_000;
+
+function getRemainingMs(until: number): number {
+  return Math.max(0, until - Date.now());
+}
+
+function getStoredCooldownUntil(key: string): number {
+  const raw = localStorage.getItem(key);
+  const value = raw ? Number(raw) : 0;
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return value;
+}
+
+function setCooldown(key: string, durationMs: number) {
+  const until = Date.now() + durationMs;
+  localStorage.setItem(key, String(until));
+}
+
 export default function Register() {
   const navigate = useNavigate();
-  const { setTelegramSession } = useAuth();
+  const { setTelegramSession, refreshProfile } = useAuth();
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [loading, setLoading] = React.useState(false);
+  const [emailLoading, setEmailLoading] = React.useState(false);
+  const [oauthLoading, setOauthLoading] = React.useState(false);
+  const [telegramLoading, setTelegramLoading] = React.useState(false);
+  const [cooldownUntil, setCooldownUntil] = React.useState(() => getStoredCooldownUntil(SIGNUP_COOLDOWN_KEY));
+
   const emailSubmitLockRef = React.useRef(false);
   const oauthSubmitLockRef = React.useRef(false);
   const telegramLockRef = React.useRef(false);
+  const oauthErrorHandledRef = React.useRef(false);
+
+  const cooldownRemainingMs = getRemainingMs(cooldownUntil);
+  const cooldownActive = cooldownRemainingMs > 0;
+  const cooldownSeconds = Math.ceil(cooldownRemainingMs / 1000);
+
+  const isAnyLoading = emailLoading || oauthLoading || telegramLoading;
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const formRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!cooldownActive) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCooldownUntil(getStoredCooldownUntil(SIGNUP_COOLDOWN_KEY));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [cooldownActive]);
 
   React.useEffect(() => {
     if (containerRef.current && formRef.current) {
@@ -38,44 +84,78 @@ export default function Register() {
     }
   }, []);
 
+  React.useEffect(() => {
+    if (oauthErrorHandledRef.current) {
+      return;
+    }
+
+    const oauthErrorMessage = getGoogleOAuthErrorMessageFromUrl(window.location);
+    if (!oauthErrorMessage) {
+      return;
+    }
+
+    oauthErrorHandledRef.current = true;
+    toast.error(oauthErrorMessage);
+
+    if (window.location.search || window.location.hash) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loading || emailSubmitLockRef.current) return;
+
+    if (cooldownActive) {
+      toast.error(`Too many signup attempts. Please wait ${cooldownSeconds}s and try again.`);
+      return;
+    }
+
+    if (isAnyLoading || emailSubmitLockRef.current) return;
+
     emailSubmitLockRef.current = true;
-    setLoading(true);
+    setEmailLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const response = await register({
         email: email.trim().toLowerCase(),
         password,
       });
 
-      if (error) throw error;
+      const { error } = await supabase.auth.setSession({
+        access_token: response.session.access_token,
+        refresh_token: response.session.refresh_token,
+      });
 
-      if (data.user?.identities?.length === 0) {
-        toast.error("An account with this email already exists");
-        return;
+      if (error) {
+        throw error;
       }
 
-      toast.success(
-        "Registration successful. Continue by choosing your username.",
-      );
+      await refreshProfile();
+      toast.success("Registration successful. Continue by choosing your username.");
       navigate("/set-username");
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error("email registration failed", err);
+
+      if (isAuthRateLimitError(err)) {
+        setCooldown(SIGNUP_COOLDOWN_KEY, SIGNUP_COOLDOWN_MS);
+        setCooldownUntil(getStoredCooldownUntil(SIGNUP_COOLDOWN_KEY));
+      }
+
       toast.error(getSignupErrorMessage(err));
     } finally {
       emailSubmitLockRef.current = false;
-      setLoading(false);
+      setEmailLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    if (loading || oauthSubmitLockRef.current) return;
+    if (isAnyLoading || oauthSubmitLockRef.current) return;
+
     oauthSubmitLockRef.current = true;
-    setLoading(true);
+    setOauthLoading(true);
     let shouldReleaseLock = true;
+
     try {
       const redirectUrl = `${window.location.origin}/dashboard`;
 
@@ -89,6 +169,7 @@ export default function Register() {
       if (error) {
         throw error;
       }
+
       shouldReleaseLock = false;
     } catch (err: any) {
       // eslint-disable-next-line no-console
@@ -97,19 +178,20 @@ export default function Register() {
     } finally {
       if (shouldReleaseLock) {
         oauthSubmitLockRef.current = false;
-        setLoading(false);
+        setOauthLoading(false);
       }
     }
   };
 
   React.useEffect(() => {
-    (
-      window as Window & {
-        onTelegramAuth?: (user: Record<string, unknown>) => Promise<void>;
-      }
-    ).onTelegramAuth = async (user: Record<string, unknown>) => {
-      if (telegramLockRef.current) return;
+    (window as Window & { onTelegramAuth?: (user: Record<string, unknown>) => Promise<void> }).onTelegramAuth = async (
+      user: Record<string, unknown>,
+    ) => {
+      if (isAnyLoading || telegramLockRef.current) return;
+
       telegramLockRef.current = true;
+      setTelegramLoading(true);
+
       try {
         const res = await telegramAuth(user);
         if ("accessToken" in res) {
@@ -118,19 +200,26 @@ export default function Register() {
           return;
         }
 
+        if ("linked" in res) {
+          await refreshProfile();
+          navigate("/dashboard");
+          return;
+        }
+
         toast.error("Telegram registration response is invalid");
       } catch (err: any) {
-        toast.error(err?.message || "Telegram login failed");
+        toast.error(getSignupErrorMessage(err));
       } finally {
         telegramLockRef.current = false;
+        setTelegramLoading(false);
       }
     };
-  }, [setTelegramSession, navigate]);
+  }, [isAnyLoading, navigate, refreshProfile, setTelegramSession]);
 
   React.useEffect(() => {
     const botUsername =
-      (window as Window & { __TELEGRAM_BOT_USERNAME?: string })
-        .__TELEGRAM_BOT_USERNAME || "SypevBot";
+      (window as Window & { __TELEGRAM_BOT_USERNAME?: string }).__TELEGRAM_BOT_USERNAME ||
+      "SypevBot";
     if (!botUsername) return;
 
     const script = document.createElement("script");
@@ -143,6 +232,7 @@ export default function Register() {
     script.async = true;
 
     const container = document.getElementById("telegram-register-container");
+    container?.replaceChildren();
     container?.appendChild(script);
 
     return () => {
@@ -159,9 +249,7 @@ export default function Register() {
           <div>
             <div className="flex items-center gap-2 mb-16">
               <Command className="w-8 h-8 text-primary" />
-              <span className="text-2xl font-bold tracking-tight">
-                Test_Bro
-              </span>
+              <span className="text-2xl font-bold tracking-tight">Test_Bro</span>
             </div>
 
             <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6">
@@ -171,23 +259,14 @@ export default function Register() {
               </span>
             </h1>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
-              Create your account with Supabase Auth and complete your profile
-              once, then use any linked identity to sign in.
+              Create your account with Supabase Auth and complete your profile once, then use any linked identity to sign in.
             </p>
           </div>
         </div>
 
-        <div
-          className="flex flex-col justify-center items-center p-6 sm:p-12 relative"
-          ref={containerRef}
-        >
+        <div className="flex flex-col justify-center items-center p-6 sm:p-12 relative" ref={containerRef}>
           <div className="w-full justify-start mb-4 max-w-md animate-element">
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="-ml-4 text-muted-foreground hover:text-foreground"
-            >
+            <Button variant="ghost" size="sm" asChild className="-ml-4 text-muted-foreground hover:text-foreground" disabled={isAnyLoading || cooldownActive}>
               <Link to="/login">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to login
@@ -197,43 +276,32 @@ export default function Register() {
 
           <div className="w-full max-w-md glass-panel p-8 sm:p-10 rounded-[2rem]">
             <div className="mb-8 animate-element">
-              <h2 className="text-3xl font-bold tracking-tight mb-2">
-                Create account
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Enter your information to get started.
-              </p>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">Create account</h2>
+              <p className="text-muted-foreground text-sm">Enter your information to get started.</p>
             </div>
 
             <div ref={formRef} className="space-y-6">
-              <form
-                className="space-y-4 animate-element"
-                onSubmit={handleEmailRegister}
-              >
+              <form className="space-y-4 animate-element" onSubmit={handleEmailRegister}>
                 <div className="space-y-2">
-                  <Label className="text-foreground/80 font-medium">
-                    Email Address
-                  </Label>
+                  <Label className="text-foreground/80 font-medium">Email Address</Label>
                   <Input
                     className="h-12 bg-background/50 focus:bg-background transition-colors"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    disabled={loading}
+                    disabled={isAnyLoading || cooldownActive}
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-foreground/80 font-medium">
-                    Password
-                  </Label>
+                  <Label className="text-foreground/80 font-medium">Password</Label>
                   <Input
                     className="h-12 bg-background/50 focus:bg-background transition-colors"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
+                    disabled={isAnyLoading || cooldownActive}
                     required
                     minLength={8}
                     placeholder="Minimum 8 characters"
@@ -242,12 +310,14 @@ export default function Register() {
                 <Button
                   type="submit"
                   className="w-full h-12 text-base font-semibold group mt-2"
-                  disabled={loading}
+                  disabled={isAnyLoading || cooldownActive}
                 >
-                  {loading ? "Creating..." : "Create Account"}
-                  {!loading && (
-                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                  )}
+                  {cooldownActive
+                    ? `Please wait ${cooldownSeconds}s`
+                    : emailLoading
+                      ? "Creating..."
+                      : "Create Account"}
+                  {!cooldownActive && !emailLoading && <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />}
                 </Button>
               </form>
 
@@ -256,9 +326,7 @@ export default function Register() {
                   <div className="w-full border-t border-border/60" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase font-semibold">
-                  <span className="bg-background/80 backdrop-blur-md px-3 text-muted-foreground rounded-full">
-                    Or register with
-                  </span>
+                  <span className="bg-background/80 backdrop-blur-md px-3 text-muted-foreground rounded-full">Or register with</span>
                 </div>
               </div>
 
@@ -268,46 +336,23 @@ export default function Register() {
                   variant="outline"
                   className="w-full h-12 flex items-center justify-center gap-2"
                   onClick={handleGoogleLogin}
-                  disabled={loading}
+                  disabled={isAnyLoading || cooldownActive}
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-5 h-5"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.25033 6.60998L5.31033 9.76C6.27533 6.81 9.07033 4.75 12.0003 4.75Z"
-                      fill="#EA4335"
-                    />
-                    <path
-                      d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z"
-                      fill="#4285F4"
-                    />
-                    <path
-                      d="M5.26498 14.2949C5.02498 13.5649 4.88501 12.7949 4.88501 11.9949C4.88501 11.1949 5.01998 10.4249 5.26498 9.6949L1.275 6.65486C0.46 8.22986 0 10.0549 0 11.9949C0 13.9349 0.46 15.7599 1.28 17.3349L5.26498 14.2949Z"
-                      fill="#FBBC05"
-                    />
-                    <path
-                      d="M12.0004 24C15.2404 24 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C9.07041 19.245 6.27541 17.185 5.31041 14.235L1.25043 17.385C3.25543 21.305 7.31041 24 12.0004 24Z"
-                      fill="#34A853"
-                    />
-                  </svg>
-                  Continue with Google
+                  <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true"><path d="M12.0003 4.75C13.7703 4.75 15.3553 5.36002 16.6053 6.54998L20.0303 3.125C17.9502 1.19 15.2353 0 12.0003 0C7.31028 0 3.25527 2.69 1.25033 6.60998L5.31033 9.76C6.27533 6.81 9.07033 4.75 12.0003 4.75Z" fill="#EA4335"/><path d="M23.49 12.275C23.49 11.49 23.415 10.73 23.3 10H12V14.51H18.47C18.18 15.99 17.34 17.25 16.08 18.1L19.945 21.1C22.2 19.01 23.49 15.92 23.49 12.275Z" fill="#4285F4"/><path d="M5.26498 14.2949C5.02498 13.5649 4.88501 12.7949 4.88501 11.9949C4.88501 11.1949 5.01998 10.4249 5.26498 9.6949L1.275 6.65486C0.46 8.22986 0 10.0549 0 11.9949C0 13.9349 0.46 15.7599 1.28 17.3349L5.26498 14.2949Z" fill="#FBBC05"/><path d="M12.0004 24C15.2404 24 17.9654 22.935 19.9454 21.095L16.0804 18.095C15.0054 18.82 13.6204 19.245 12.0004 19.245C9.07041 19.245 6.27541 17.185 5.31041 14.235L1.25043 17.385C3.25543 21.305 7.31041 24 12.0004 24Z" fill="#34A853"/></svg>
+                  {oauthLoading ? "Redirecting to Google..." : "Continue with Google"}
                 </Button>
 
                 <div
                   id="telegram-register-container"
-                  className="flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow w-full"
+                  className={`flex justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm hover:shadow transition-shadow w-full ${isAnyLoading || cooldownActive ? "pointer-events-none opacity-60" : ""}`}
                 />
+                {telegramLoading && <p className="text-xs text-muted-foreground">Authenticating with Telegram...</p>}
               </div>
 
               <div className="text-center mt-8 animate-element">
                 <p className="text-sm text-muted-foreground">
                   Already have an account?{" "}
-                  <Link
-                    className="text-foreground font-semibold hover:text-primary transition-colors hover:underline"
-                    to="/login"
-                  >
+                  <Link className="text-foreground font-semibold hover:text-primary transition-colors hover:underline" to="/login">
                     Sign in
                   </Link>
                 </p>

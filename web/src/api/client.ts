@@ -23,6 +23,22 @@ export function clearCustomAccessToken() {
   localStorage.removeItem(CUSTOM_AUTH_TOKEN_KEY);
 }
 
+function buildFallbackError(status: number, message: string): ApiError {
+  if (status === 429) {
+    return {
+      code: "RATE_LIMIT",
+      message: "Too many requests. Please wait and try again.",
+      status,
+    };
+  }
+
+  return {
+    code: "REQUEST_FAILED",
+    message,
+    status,
+  };
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -31,10 +47,14 @@ export async function apiFetch<T>(
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  const customToken = getCustomAccessToken();
 
+  const customToken = getCustomAccessToken();
   const headers = new Headers(options.headers || {});
-  headers.set("Content-Type", "application/json");
+
+  if (!headers.has("Content-Type") && options.body !== undefined) {
+    headers.set("Content-Type", "application/json");
+  }
+
   if (session?.access_token) {
     headers.set("Authorization", `Bearer ${session.access_token}`);
   } else if (customToken) {
@@ -44,37 +64,64 @@ export async function apiFetch<T>(
   const fullUrl = path.startsWith("http") ? path : `${BASE_URL}${path}`;
   const isAdminRoute = path.includes("/admin");
 
-  const res = await fetch(fullUrl, {
-    ...options,
-    headers,
-    credentials: isAdminRoute ? "include" : "omit", // Admin relies on cross-domain cookies
-  });
+  let res: Response;
+  try {
+    res = await fetch(fullUrl, {
+      ...options,
+      headers,
+      credentials: isAdminRoute ? "include" : "omit",
+    });
+  } catch {
+    const networkError: ApiError = {
+      code: "NETWORK_ERROR",
+      message: "Network error. Please check your connection and try again.",
+      status: 0,
+    };
+    if (!config.silent) {
+      toast.error(networkError.message);
+    }
+    throw networkError;
+  }
 
   let data: any = null;
   try {
     data = await res.json();
   } catch {
-    const fallback = {
-      ok: false,
-      error: {
-        code: "NON_JSON_RESPONSE",
-        message: res.ok ? "Unexpected non-JSON response" : "Request failed",
-      },
-    };
+    const fallback = buildFallbackError(
+      res.status,
+      res.ok ? "Unexpected non-JSON response" : "Request failed",
+    );
+
     if (!config.silent) {
-      toast.error(fallback.error.message);
+      toast.error(fallback.message);
     }
-    throw fallback.error;
+
+    throw fallback;
   }
+
   if (!data.ok) {
     const err = {
       ...(data.error as ApiError),
       status: res.status,
     } as ApiError;
+
+    if (!err.code) {
+      err.code = res.status === 429 ? "RATE_LIMIT" : "REQUEST_FAILED";
+    }
+
+    if (!err.message) {
+      err.message =
+        res.status === 429
+          ? "Too many requests. Please wait and try again."
+          : "Request failed";
+    }
+
     if (!config.silent && ![400, 401, 403, 409, 429].includes(res.status)) {
       toast.error(err.message || "Request failed");
     }
+
     throw err;
   }
+
   return data.data as T;
 }

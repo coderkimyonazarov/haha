@@ -1,25 +1,33 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
 let adminClient: SupabaseClient | null = null;
 let anonClient: SupabaseClient | null = null;
 
-function assertSupabaseUrlConfigured() {
+function getSupabaseUrl() {
+  return process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+}
+
+function getSupabaseAnonKey() {
+  return process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+}
+
+function getSupabaseServiceKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+}
+
+function assertSupabaseUrlConfigured(supabaseUrl: string) {
   if (!supabaseUrl) {
     throw new Error("SUPABASE_URL is missing");
   }
 }
 
-function assertSupabaseServiceKeyConfigured() {
+function assertSupabaseServiceKeyConfigured(supabaseServiceKey: string) {
   if (!supabaseServiceKey) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing");
   }
 }
 
-function assertSupabaseAnonKeyConfigured() {
+function assertSupabaseAnonKeyConfigured(supabaseAnonKey: string) {
   if (!supabaseAnonKey) {
     throw new Error("SUPABASE_ANON_KEY is missing");
   }
@@ -27,8 +35,10 @@ function assertSupabaseAnonKeyConfigured() {
 
 export function getSupabaseAdmin() {
   if (!adminClient) {
-    assertSupabaseUrlConfigured();
-    assertSupabaseServiceKeyConfigured();
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseServiceKey = getSupabaseServiceKey();
+    assertSupabaseUrlConfigured(supabaseUrl);
+    assertSupabaseServiceKeyConfigured(supabaseServiceKey);
     adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -42,8 +52,10 @@ export function getSupabaseAdmin() {
 
 export function getSupabaseAnon() {
   if (!anonClient) {
-    assertSupabaseUrlConfigured();
-    assertSupabaseAnonKeyConfigured();
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseAnonKey = getSupabaseAnonKey();
+    assertSupabaseUrlConfigured(supabaseUrl);
+    assertSupabaseAnonKeyConfigured(supabaseAnonKey);
     anonClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: false,
@@ -56,6 +68,10 @@ export function getSupabaseAnon() {
 }
 
 export function getSupabaseConfigStatus() {
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
+  const supabaseServiceKey = getSupabaseServiceKey();
+
   return {
     hasUrl: Boolean(supabaseUrl),
     hasAnonKey: Boolean(supabaseAnonKey),

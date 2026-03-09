@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { getDb } from "../db";
+import { getDb, isDatabaseHealthy } from "../db";
 import { studentProfiles, universities } from "../db/schema";
 import { parseWithSchema } from "../utils/validation";
 import { admissionsRecommendSchema } from "../validators/admissions";
+import { AppError } from "../utils/error";
 
 const router = Router();
 
@@ -11,13 +12,31 @@ const DISCLAIMER = "Estimate only. Not a guarantee.";
 
 router.post("/recommend", async (req, res, next) => {
   try {
+    if (!req.user) {
+      throw new AppError("UNAUTHORIZED", "Authentication required", 401);
+    }
+
     const input = parseWithSchema(admissionsRecommendSchema, req.body ?? {});
+    if (!isDatabaseHealthy()) {
+      return res.json({
+        ok: true,
+        data: {
+          safety: [],
+          target: [],
+          reach: [],
+          disclaimer: DISCLAIMER,
+          message: "Recommendation service temporarily unavailable."
+        }
+      });
+    }
+
     const db = getDb();
-    const profile = await db
+    const profileRows = await db
       .select()
       .from(studentProfiles)
-      .where(eq(studentProfiles.userId, req.user!.id))
-      .get();
+      .where(eq(studentProfiles.userId, req.user.id))
+      .limit(1);
+    const profile = profileRows[0] ?? null;
 
     if (profile?.satTotal === null || profile?.satTotal === undefined) {
       return res.json({

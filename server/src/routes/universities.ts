@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { getDb } from "../db";
+import { getDb, isDatabaseHealthy } from "../db";
 import { universities, universityFacts } from "../db/schema";
 import { parseWithSchema, sanitizeText } from "../utils/validation";
 import { universityListQuerySchema, universityIdParamSchema, factCreateSchema } from "../validators/universities";
@@ -9,10 +9,25 @@ import { AppError } from "../utils/error";
 
 const router = Router();
 
+function getDbOrNull() {
+  if (!isDatabaseHealthy()) {
+    return null;
+  }
+
+  try {
+    return getDb();
+  } catch {
+    return null;
+  }
+}
+
 router.get("/", async (req, res, next) => {
   try {
     const query = parseWithSchema(universityListQuerySchema, req.query);
-    const db = getDb();
+    const db = getDbOrNull();
+    if (!db) {
+      return res.json({ ok: true, data: [] });
+    }
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
 
@@ -44,8 +59,12 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const params = parseWithSchema(universityIdParamSchema, req.params);
-    const db = getDb();
-    const uni = await db.select().from(universities).where(eq(universities.id, params.id)).get();
+    const db = getDbOrNull();
+    if (!db) {
+      throw new AppError("DATABASE_UNAVAILABLE", "University service temporarily unavailable", 503);
+    }
+    const uniRows = await db.select().from(universities).where(eq(universities.id, params.id)).limit(1);
+    const uni = uniRows[0] ?? null;
     if (!uni) {
       throw new AppError("NOT_FOUND", "University not found", 404);
     }
@@ -68,9 +87,13 @@ router.post("/:id/facts", async (req, res, next) => {
     }
     const params = parseWithSchema(universityIdParamSchema, req.params);
     const input = parseWithSchema(factCreateSchema, req.body);
-    const db = getDb();
+    const db = getDbOrNull();
+    if (!db) {
+      throw new AppError("DATABASE_UNAVAILABLE", "University service temporarily unavailable", 503);
+    }
 
-    const uni = await db.select().from(universities).where(eq(universities.id, params.id)).get();
+    const uniRows = await db.select().from(universities).where(eq(universities.id, params.id)).limit(1);
+    const uni = uniRows[0] ?? null;
     if (!uni) {
       throw new AppError("NOT_FOUND", "University not found", 404);
     }
@@ -91,7 +114,12 @@ router.post("/:id/facts", async (req, res, next) => {
       isVerified: 0
     });
 
-    const created = await db.select().from(universityFacts).where(eq(universityFacts.id, factId)).get();
+    const createdRows = await db
+      .select()
+      .from(universityFacts)
+      .where(eq(universityFacts.id, factId))
+      .limit(1);
+    const created = createdRows[0] ?? null;
     res.json({ ok: true, data: created });
   } catch (error) {
     next(error);

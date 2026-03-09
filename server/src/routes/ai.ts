@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
-import { getDb } from "../db";
+import { getDb, isDatabaseHealthy } from "../db";
 import { studentProfiles, universities, universityFacts } from "../db/schema";
 import { parseWithSchema } from "../utils/validation";
 import { aiTutorSchema } from "../validators/ai";
@@ -13,6 +13,10 @@ const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS = 10;
 
 async function checkRateLimit(userId: string): Promise<boolean> {
+  if (!isDatabaseHealthy()) {
+    return true;
+  }
+
   const now = Date.now();
   const db = getDb();
   const { auditLogs } = await import("../db/schema");
@@ -25,18 +29,21 @@ async function checkRateLimit(userId: string): Promise<boolean> {
       and(
         eq(auditLogs.userId, userId),
         eq(auditLogs.action, "ai_tutor_request"),
-        gte(auditLogs.createdAt, now - WINDOW_MS),
+        gte(auditLogs.createdAt, new Date(now - WINDOW_MS)),
       ),
-    )
-    .all();
+    );
 
   return recent.length < MAX_REQUESTS;
 }
 
 router.post("/tutor", async (req, res, next) => {
   try {
+    if (!req.user) {
+      throw new AppError("UNAUTHORIZED", "Authentication required", 401);
+    }
+
     const input = parseWithSchema(aiTutorSchema, req.body);
-    const userId = req.user!.id;
+    const userId = req.user.id;
 
     const limitOk = await checkRateLimit(userId);
     if (!limitOk) {
@@ -47,20 +54,24 @@ router.post("/tutor", async (req, res, next) => {
       );
     }
 
-    const db = getDb();
-    const profile = await db
-      .select()
-      .from(studentProfiles)
-      .where(eq(studentProfiles.userId, userId))
-      .get();
+    const db = isDatabaseHealthy() ? getDb() : null;
+    const profileRows = db
+      ? await db
+          .select()
+          .from(studentProfiles)
+          .where(eq(studentProfiles.userId, userId))
+          .limit(1)
+      : [];
+    const profile = profileRows[0] ?? null;
 
     let uniContext = "";
-    if (input.university_id) {
-      const uni = await db
+    if (db && input.university_id) {
+      const uniRows = await db
         .select()
         .from(universities)
         .where(eq(universities.id, input.university_id))
-        .get();
+        .limit(1);
+      const uni = uniRows[0] ?? null;
       if (uni) {
         const facts = await db
           .select()

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getSupabaseAdmin } from "../utils/supabase";
 import { AppError } from "../utils/error";
-import { getDb } from "../db";
+import { getDb, isDatabaseHealthy } from "../db";
 import { auditLogs, universities } from "../db/schema";
 import { desc } from "drizzle-orm";
 
@@ -10,11 +10,15 @@ const router = Router();
 router.get("/dashboard-stats", async (req, res, next) => {
   try {
     const { data: { users }, error } = await getSupabaseAdmin().auth.admin.listUsers();
-    const db = getDb();
-    const [auditCountResult, universityCountResult] = await Promise.all([
-      db.$count(auditLogs),
-      db.$count(universities)
-    ]);
+    let auditCountResult = 0;
+    let universityCountResult = 0;
+    if (isDatabaseHealthy()) {
+      const db = getDb();
+      [auditCountResult, universityCountResult] = await Promise.all([
+        db.$count(auditLogs),
+        db.$count(universities)
+      ]);
+    }
     res.json({
       ok: true,
       data: {
@@ -49,6 +53,10 @@ router.get("/users", async (req, res, next) => {
 
 router.get("/audit-logs", async (req, res, next) => {
   try {
+    if (!isDatabaseHealthy()) {
+      return res.json({ ok: true, data: { logs: [] } });
+    }
+
     const db = getDb();
     const logs = await db.select()
       .from(auditLogs)

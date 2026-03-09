@@ -8,7 +8,7 @@ export type TutorResponse = {
 export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
   // 1. Try OpenRouter
   const openRouterKey = process.env.OPENROUTER_API_KEY;
-  if (openRouterKey) {
+  if (openRouterKey && openRouterKey !== "your_openrouter_api_key_here") {
     try {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -17,21 +17,27 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
           Authorization: `Bearer ${openRouterKey}`,
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash", // OpenRouter defaults or specific model
+          model: "google/gemini-2.0-flash-lite-preview-02-05:free", // explicit free model
           messages: [{ role: "user", content: prompt }]
         })
       });
-      if (!res.ok) throw new Error(`OpenRouter error: ${res.statusText}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`OpenRouter error: ${res.status} ${res.statusText} - ${errText}`);
+      }
       const data = await res.json() as any;
+      if (!data.choices || !data.choices[0]) {
+         throw new Error(`OpenRouter invalid response: ${JSON.stringify(data)}`);
+      }
       return { reply: data.choices[0].message.content, mode: "openrouter" };
-    } catch (e) {
-      console.error("OpenRouter failed:", e);
+    } catch (e: any) {
+      console.error("OpenRouter failed:", e.message);
     }
   }
 
   // 2. Try Groq
   const groqKey = process.env.GROQ_API_KEY;
-  if (groqKey) {
+  if (groqKey && groqKey !== "your_groq_api_key_here") {
     try {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -40,15 +46,21 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
           Authorization: `Bearer ${groqKey}`,
         },
         body: JSON.stringify({
-          model: "llama3-8b-8192", // Fast and free groq model
+          model: "llama-3.3-70b-versatile", // Use a widely supported groq model
           messages: [{ role: "user", content: prompt }]
         })
       });
-      if (!res.ok) throw new Error(`Groq error: ${res.statusText}`);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Groq error: ${res.status} ${res.statusText} - ${errText}`);
+      }
       const data = await res.json() as any;
+      if (!data.choices || !data.choices[0]) {
+         throw new Error(`Groq invalid response: ${JSON.stringify(data)}`);
+      }
       return { reply: data.choices[0].message.content, mode: "groq" };
-    } catch (e) {
-      console.error("Groq failed:", e);
+    } catch (e: any) {
+      console.error("Groq failed:", e.message);
     }
   }
 
@@ -56,30 +68,13 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
   /*
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey) {
-    try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (!res.ok) throw new Error(`OpenAI error: ${res.statusText}`);
-      const data = await res.json() as any;
-      return { reply: data.choices[0].message.content, mode: "openai" };
-    } catch (e) {
-      console.error("OpenAI failed:", e);
-    }
+  ...
   }
   */
 
   // 4. Try Gemini (Primary Free Tier — 1M tokens/day)
   const geminiKey = process.env.GEMINI_API_KEY;
-  if (geminiKey) {
+  if (geminiKey && geminiKey !== "your_gemini_api_key_here") {
     try {
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -89,15 +84,16 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
       const text = response.text();
 
       return { reply: text, mode: "gemini" };
-    } catch (e) {
-      console.error("Gemini failed:", e);
+    } catch (e: any) {
+      console.error("Gemini failed:", e.message);
     }
   }
 
   // 5. Fallback to Mock
   return {
     reply:
-      "I'm currently in offline mode. Please configure OPENROUTER_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY for real guidance.",
+      "I'm currently in offline mode. Please configure OPENROUTER_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY with valid credits to continue.",
     mode: "mock",
   };
 }
+

@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
 
-import { getDb, getDbConfigStatus } from "../db";
+import { getDb, getDbConfigStatus, isDatabaseHealthy } from "../db";
 import { linkedIdentities, studentProfiles } from "../db/schema";
 import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
 import { getSupabaseAdmin, getSupabaseAnon, getSupabaseConfigStatus } from "../utils/supabase";
@@ -23,6 +23,10 @@ import { z } from "zod";
 const router = Router();
 
 const TELEGRAM_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+const REGISTER_INFLIGHT_TTL_MS = 20_000;
+const LOGIN_INFLIGHT_TTL_MS = 15_000;
+const registerInFlight = new Map<string, number>();
+const loginInFlight = new Map<string, number>();
 const setPasswordSchema = z.object({
   password: z.string().min(8).max(128),
 });
@@ -96,6 +100,131 @@ function getUserProviders(user: any): Set<string> {
   }
 
   return providers;
+}
+
+function isRateLimitError(error: { status?: number | null; message?: string | null }): boolean {
+  const status = typeof error.status === "number" ? error.status : 0;
+  const message = (error.message ?? "").toLowerCase();
+  return status === 429 || message.includes("rate limit");
+}
+
+async function findSupabaseUserByEmail(email: string, requestId: string) {
+  const { data: adminUserRes, error: listUsersError } = await getSupabaseAdmin()
+    .auth.admin.listUsers({ search: email });
+
+  if (listUsersError) {
+    logAuthDebug("login", requestId, "failed to list users for provider inspection", {
+      lookupEmail: email,
+      supabaseError: listUsersError.message,
+    }, "error");
+    return null;
+  }
+
+  return (
+    adminUserRes?.users?.find((user) => user.email?.toLowerCase() === email.toLowerCase()) ?? null
+  );
+}
+
+function acquireInFlightLock(
+  pool: Map<string, number>,
+  key: string,
+  ttlMs: number,
+): boolean {
+  const now = Date.now();
+  const existing = pool.get(key);
+  if (existing && now - existing < ttlMs) {
+    return false;
+  }
+
+  pool.set(key, now);
+  return true;
+}
+
+function releaseInFlightLock(pool: Map<string, number>, key: string) {
+  pool.delete(key);
+}
+
+async function findSupabaseUserByUsername(normalizedUsername: string, requestId: string) {
+  const maxPages = 50;
+  const perPage = 200;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const { data, error } = await getSupabaseAdmin().auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) {
+      logAuthDebug(
+        "username-lookup",
+        requestId,
+        "failed to list users for username lookup",
+        { supabaseError: error.message, page, perPage },
+        "error",
+      );
+      throw new Error(error.message || "Failed to query auth users");
+    }
+
+    const users = data?.users ?? [];
+    const matchedUser =
+      users.find((user) => {
+        const metadataUsername = user.user_metadata?.username;
+        if (typeof metadataUsername !== "string") {
+          return false;
+        }
+        return normalizeUsername(metadataUsername) === normalizedUsername;
+      }) ?? null;
+
+    if (matchedUser) {
+      return matchedUser;
+    }
+
+    if (users.length < perPage) {
+      break;
+    }
+  }
+
+  return null;
+}
+
+async function findSupabaseUserByTelegramId(telegramUserId: string, requestId: string) {
+  const maxPages = 50;
+  const perPage = 200;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const { data, error } = await getSupabaseAdmin().auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) {
+      logAuthDebug(
+        "telegram",
+        requestId,
+        "failed to list users for telegram lookup",
+        { supabaseError: error.message, page, perPage },
+        "error",
+      );
+      throw new Error(error.message || "Failed to query auth users");
+    }
+
+    const users = data?.users ?? [];
+    const matchedUser =
+      users.find((user) => {
+        const metadataTelegramId = user.user_metadata?.telegram_user_id;
+        return typeof metadataTelegramId === "string" && metadataTelegramId === telegramUserId;
+      }) ?? null;
+
+    if (matchedUser) {
+      return matchedUser;
+    }
+
+    if (users.length < perPage) {
+      break;
+    }
+  }
+
+  return null;
 }
 
 async function resolveSupabaseUserFromBearerToken(authorization?: string) {
@@ -209,22 +338,59 @@ router.get("/check-username", authReadLimiter, async (req, res) => {
       });
     }
 
-    let existing: { userId: string }[] = [];
+    if (isDatabaseHealthy()) {
+      try {
+        const db = getDb();
+        const existing = await db
+          .select({ userId: studentProfiles.userId })
+          .from(studentProfiles)
+          .where(eq(studentProfiles.username, normalizedUsername))
+          .limit(1);
+        logAuthDebug("check-username", requestId, "db lookup succeeded", {
+          foundCount: existing.length,
+        });
+        return res.status(200).json({
+          ok: true,
+          data: {
+            available: existing.length === 0,
+            valid: true,
+            normalizedUsername,
+            error: null,
+          },
+        });
+      } catch (dbError) {
+        logAuthDebug(
+          "check-username",
+          requestId,
+          "db lookup failure; falling back to supabase auth users",
+          {
+            error: formatErrorForLog(dbError),
+            dbConfig: getDbConfigStatus(),
+          },
+          "error",
+        );
+      }
+    }
+
     try {
-      const db = getDb();
-      existing = await db
-        .select({ userId: studentProfiles.userId })
-        .from(studentProfiles)
-        .where(eq(studentProfiles.username, normalizedUsername))
-        .limit(1);
-      logAuthDebug("check-username", requestId, "db lookup succeeded", {
-        foundCount: existing.length,
+      const matchedUser = await findSupabaseUserByUsername(normalizedUsername, requestId);
+      return res.status(200).json({
+        ok: true,
+        data: {
+          available: !matchedUser,
+          valid: true,
+          normalizedUsername,
+          error: null,
+        },
       });
-    } catch (dbError) {
-      logAuthDebug("check-username", requestId, "db lookup failure", {
-        error: formatErrorForLog(dbError),
-        dbConfig: getDbConfigStatus(),
-      }, "error");
+    } catch (fallbackError) {
+      logAuthDebug(
+        "check-username",
+        requestId,
+        "fallback username lookup failed",
+        { error: formatErrorForLog(fallbackError) },
+        "error",
+      );
       return res.status(200).json({
         ok: true,
         data: {
@@ -235,16 +401,6 @@ router.get("/check-username", authReadLimiter, async (req, res) => {
         },
       });
     }
-
-    return res.status(200).json({
-      ok: true,
-      data: {
-        available: existing.length === 0,
-        valid: true,
-        normalizedUsername,
-        error: null,
-      },
-    });
   } catch (error) {
     logAuthDebug("check-username", requestId, "route failed", {
       error: formatErrorForLog(error),
@@ -266,11 +422,23 @@ router.get("/check-username", authReadLimiter, async (req, res) => {
 
 router.post("/register", authLimiter, async (req, res) => {
   const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+  let registerLockKey: string | null = null;
 
   try {
     const input = parseWithSchema(registerSchema, req.body);
     const email = input.email.trim().toLowerCase();
     const password = input.password;
+    registerLockKey = `register:${email}`;
+
+    if (!acquireInFlightLock(registerInFlight, registerLockKey, REGISTER_INFLIGHT_TTL_MS)) {
+      return res.status(429).json({
+        ok: false,
+        error: {
+          code: "RATE_LIMIT",
+          message: "Too many signup attempts. Please wait before trying again.",
+        },
+      });
+    }
 
     logAuthDebug("register", requestId, "incoming request", {
       emailDomain: email.split("@")[1] ?? "",
@@ -342,10 +510,17 @@ router.post("/register", authLimiter, async (req, res) => {
       });
     }
 
-    await getDb()
-      .insert(studentProfiles)
-      .values({ userId: created.user.id })
-      .onConflictDoNothing({ target: studentProfiles.userId });
+    try {
+      await getDb()
+        .insert(studentProfiles)
+        .values({ userId: created.user.id })
+        .onConflictDoNothing({ target: studentProfiles.userId });
+    } catch (dbError) {
+      logAuthDebug("register", requestId, "profile row insert skipped due db failure", {
+        userId: created.user.id,
+        error: formatErrorForLog(dbError),
+      }, "error");
+    }
 
     const { data: authData, error: authError } = await getSupabaseAnon().auth.signInWithPassword({
       email,
@@ -396,10 +571,16 @@ router.post("/register", authLimiter, async (req, res) => {
         message: "Registration service temporarily unavailable",
       },
     });
+  } finally {
+    if (registerLockKey) {
+      releaseInFlightLock(registerInFlight, registerLockKey);
+    }
   }
 });
 
 router.post("/set-username", authLimiter, async (req, res, next) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+
   try {
     const input = parseWithSchema(usernameSchema, req.body);
     const user = await resolveSupabaseUserFromBearerToken(req.headers.authorization);
@@ -415,31 +596,96 @@ router.post("/set-username", authLimiter, async (req, res, next) => {
       throw new AppError("INVALID_INPUT", validation.error ?? "Invalid username", 400);
     }
 
-    const db = getDb();
+    if (isDatabaseHealthy()) {
+      try {
+        const db = getDb();
 
-    const existing = await db
-      .select({ userId: studentProfiles.userId })
-      .from(studentProfiles)
-      .where(eq(studentProfiles.username, normalizedUsername))
-      .limit(1);
+        const existing = await db
+          .select({ userId: studentProfiles.userId })
+          .from(studentProfiles)
+          .where(eq(studentProfiles.username, normalizedUsername))
+          .limit(1);
 
-    if (existing.length > 0 && existing[0].userId !== user.id) {
-      throw new AppError("USERNAME_TAKEN", "This username is already taken", 409);
+        if (existing.length > 0 && existing[0].userId !== user.id) {
+          throw new AppError("USERNAME_TAKEN", "This username is already taken", 409);
+        }
+
+        await db
+          .insert(studentProfiles)
+          .values({
+            userId: user.id,
+            username: normalizedUsername,
+          })
+          .onConflictDoUpdate({
+            target: studentProfiles.userId,
+            set: {
+              username: normalizedUsername,
+              updatedAt: new Date(),
+            },
+          });
+      } catch (dbError) {
+        if (dbError instanceof AppError) {
+          throw dbError;
+        }
+        logAuthDebug(
+          "set-username",
+          requestId,
+          "db write failed; using supabase metadata fallback",
+          { error: formatErrorForLog(dbError) },
+          "error",
+        );
+      }
     }
 
-    await db
-      .insert(studentProfiles)
-      .values({
-        userId: user.id,
-        username: normalizedUsername,
-      })
-      .onConflictDoUpdate({
-        target: studentProfiles.userId,
-        set: {
-          username: normalizedUsername,
-          updatedAt: new Date(),
-        },
-      });
+    try {
+      const matchedUser = await findSupabaseUserByUsername(normalizedUsername, "set-username");
+      if (matchedUser && matchedUser.id !== user.id) {
+        throw new AppError("USERNAME_TAKEN", "This username is already taken", 409);
+      }
+    } catch (lookupError) {
+      if (lookupError instanceof AppError) {
+        throw lookupError;
+      }
+      logAuthDebug(
+        "set-username",
+        requestId,
+        "supabase username uniqueness lookup failed",
+        { error: formatErrorForLog(lookupError) },
+        "error",
+      );
+      throw new AppError(
+        "AUTH_SERVICE_UNAVAILABLE",
+        "Username service temporarily unavailable",
+        503,
+      );
+    }
+
+    const mergedMetadata = {
+      ...(user.user_metadata ?? {}),
+      username: normalizedUsername,
+    };
+
+    const { error: metadataUpdateError } = await getSupabaseAdmin().auth.admin.updateUserById(
+      user.id,
+      {
+        user_metadata: mergedMetadata,
+      },
+    );
+
+    if (metadataUpdateError) {
+      logAuthDebug(
+        "set-username",
+        requestId,
+        "supabase metadata update failed",
+        { supabaseError: metadataUpdateError.message },
+        "error",
+      );
+      throw new AppError(
+        "AUTH_SERVICE_UNAVAILABLE",
+        "Username service temporarily unavailable",
+        503,
+      );
+    }
 
     return res.json({
       ok: true,
@@ -448,12 +694,23 @@ router.post("/set-username", authLimiter, async (req, res, next) => {
       },
     });
   } catch (error) {
-    next(error);
+    if (error instanceof AppError) {
+      return next(error);
+    }
+
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "AUTH_SERVICE_UNAVAILABLE",
+        message: "Username service temporarily unavailable",
+      },
+    });
   }
 });
 
 router.post("/login", authLimiter, async (req, res) => {
   const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+  let loginLockKey: string | null = null;
 
   try {
     const input = parseWithSchema(loginSchema, req.body);
@@ -461,6 +718,17 @@ router.post("/login", authLimiter, async (req, res) => {
     const identifier = input.identifier.trim();
     const password = input.password;
     const identifierIsEmail = isEmailIdentifier(identifier);
+    loginLockKey = `login:${identifier.toLowerCase()}`;
+
+    if (!acquireInFlightLock(loginInFlight, loginLockKey, LOGIN_INFLIGHT_TTL_MS)) {
+      return res.status(429).json({
+        ok: false,
+        error: {
+          code: "RATE_LIMIT",
+          message: "Too many login attempts. Please wait and try again.",
+        },
+      });
+    }
 
     logAuthDebug("login", requestId, "incoming request", {
       identifierIsEmail,
@@ -492,28 +760,63 @@ router.post("/login", authLimiter, async (req, res) => {
         });
       }
 
-      let profile;
-      try {
-        const db = getDb();
-        profile = await db
-          .select({ userId: studentProfiles.userId })
-          .from(studentProfiles)
-          .where(eq(studentProfiles.username, normalizedUsername))
-          .limit(1);
-      } catch (dbError) {
-        logAuthDebug("login", requestId, "username lookup db failure", {
-          error: formatErrorForLog(dbError),
-        });
-        return res.status(503).json({
-          ok: false,
-          error: {
-            code: "AUTH_SERVICE_UNAVAILABLE",
-            message: "Login service temporarily unavailable",
-          },
-        });
+      let usernameUserId: string | null = null;
+      if (isDatabaseHealthy()) {
+        try {
+          const db = getDb();
+          const profile = await db
+            .select({ userId: studentProfiles.userId })
+            .from(studentProfiles)
+            .where(eq(studentProfiles.username, normalizedUsername))
+            .limit(1);
+          usernameUserId = profile[0]?.userId ?? null;
+        } catch (dbError) {
+          logAuthDebug("login", requestId, "username lookup db failure; fallback to supabase", {
+            error: formatErrorForLog(dbError),
+          });
+        }
       }
 
-      if (!profile || profile.length === 0) {
+      let userFromLookup = null;
+      if (usernameUserId) {
+        const {
+          data: { user },
+          error: userLookupError,
+        } = await getSupabaseAdmin().auth.admin.getUserById(usernameUserId);
+
+        if (userLookupError || !user?.email) {
+          logAuthDebug("login", requestId, "supabase user lookup failure", {
+            hasUser: Boolean(user),
+            supabaseError: userLookupError?.message ?? null,
+          });
+          return res.status(401).json({
+            ok: false,
+            error: {
+              code: "INVALID_CREDENTIALS",
+              message: "Invalid credentials",
+            },
+          });
+        }
+
+        userFromLookup = user;
+      } else {
+        try {
+          userFromLookup = await findSupabaseUserByUsername(normalizedUsername, requestId);
+        } catch (fallbackError) {
+          logAuthDebug("login", requestId, "username lookup fallback failure", {
+            error: formatErrorForLog(fallbackError),
+          }, "error");
+          return res.status(503).json({
+            ok: false,
+            error: {
+              code: "AUTH_SERVICE_UNAVAILABLE",
+              message: "Login service temporarily unavailable",
+            },
+          });
+        }
+      }
+
+      if (!userFromLookup?.email) {
         logAuthDebug("login", requestId, "username not found", {
           normalizedUsername,
         });
@@ -526,26 +829,7 @@ router.post("/login", authLimiter, async (req, res) => {
         });
       }
 
-      const {
-        data: { user },
-        error: userLookupError,
-      } = await getSupabaseAdmin().auth.admin.getUserById(profile[0].userId);
-
-      if (userLookupError || !user?.email) {
-        logAuthDebug("login", requestId, "supabase user lookup failure", {
-          hasUser: Boolean(user),
-          supabaseError: userLookupError?.message ?? null,
-        });
-        return res.status(401).json({
-          ok: false,
-          error: {
-            code: "INVALID_CREDENTIALS",
-            message: "Invalid credentials",
-          },
-        });
-      }
-
-      emailForLogin = user.email;
+      emailForLogin = userFromLookup.email;
     }
 
     const { data: authData, error: authError } = await getSupabaseAnon().auth.signInWithPassword(
@@ -556,36 +840,38 @@ router.post("/login", authLimiter, async (req, res) => {
     );
 
     if (authError || !authData.session || !authData.user) {
-      const { data: adminUserRes, error: listUsersError } = await getSupabaseAdmin()
-        .auth.admin.listUsers({ search: emailForLogin });
+      if (isRateLimitError(authError ?? {})) {
+        return res.status(429).json({
+          ok: false,
+          error: {
+            code: "RATE_LIMIT",
+            message: "Too many login attempts. Please wait and try again.",
+          },
+        });
+      }
 
-      if (!listUsersError) {
-        const existingUser = adminUserRes?.users?.find(
-          (u) => u.email?.toLowerCase() === emailForLogin.toLowerCase(),
-        );
+      const existingUser = await findSupabaseUserByEmail(emailForLogin, requestId);
+      if (existingUser) {
+        const providers = getUserProviders(existingUser);
+        const hasEmailProvider = providers.has("email");
+        const hasGoogleProvider = providers.has("google");
 
-        if (existingUser) {
-          const providers = getUserProviders(existingUser);
-          const hasEmailProvider = providers.has("email");
-          const hasGoogleProvider = providers.has("google");
+        logAuthDebug("login", requestId, "password login rejected for existing account", {
+          identifierIsEmail,
+          userId: existingUser.id,
+          providers: Array.from(providers),
+          hasEmailProvider,
+          hasGoogleProvider,
+        });
 
-          logAuthDebug("login", requestId, "password login rejected for existing account", {
-            identifierIsEmail,
-            userId: existingUser.id,
-            providers: Array.from(providers),
-            hasEmailProvider,
-            hasGoogleProvider,
+        if (!hasEmailProvider && hasGoogleProvider) {
+          return res.status(401).json({
+            ok: false,
+            error: {
+              code: "SOCIAL_LOGIN_REQUIRED",
+              message: "This account was created with Google. Please sign in with Google.",
+            },
           });
-
-          if (!hasEmailProvider && hasGoogleProvider) {
-            return res.status(401).json({
-              ok: false,
-              error: {
-                code: "SOCIAL_LOGIN_REQUIRED",
-                message: "This account was created with Google. Please sign in with Google.",
-              },
-            });
-          }
         }
       }
 
@@ -611,6 +897,16 @@ router.post("/login", authLimiter, async (req, res) => {
       },
     });
   } catch (error) {
+    if (error instanceof AppError && error.status === 400) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: "INVALID_CREDENTIALS",
+          message: "Invalid credentials",
+        },
+      });
+    }
+
     logAuthDebug("login", requestId, "route failed", {
       error: formatErrorForLog(error),
       dbConfig: getDbConfigStatus(),
@@ -624,6 +920,10 @@ router.post("/login", authLimiter, async (req, res) => {
         message: "Login service temporarily unavailable",
       },
     });
+  } finally {
+    if (loginLockKey) {
+      releaseInFlightLock(loginInFlight, loginLockKey);
+    }
   }
 });
 
@@ -642,8 +942,17 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
       throw new AppError("INVALID_AUTH", "Invalid Telegram auth signature", 401);
     }
 
-    const db = getDb();
     const telegramUserId = String(input.id);
+    let db: ReturnType<typeof getDb> | null = null;
+    if (isDatabaseHealthy()) {
+      try {
+        db = getDb();
+      } catch (dbError) {
+        logAuthDebug("telegram", requestId, "db unavailable, using supabase-only fallback", {
+          error: formatErrorForLog(dbError),
+        }, "error");
+      }
+    }
 
     const sessionUser = await resolveSupabaseUserFromBearerToken(req.headers.authorization);
 
@@ -655,31 +964,83 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
         supabaseConfig: getSupabaseConfigStatus(),
       });
 
-      const existingProviderLink = await db
-        .select({ id: linkedIdentities.id })
-        .from(linkedIdentities)
-        .where(
-          and(
-            eq(linkedIdentities.provider, "telegram"),
-            eq(linkedIdentities.providerUserId, telegramUserId),
-          ),
-        )
-        .limit(1);
+      let linkedUserId: string | null = null;
+      if (db) {
+        try {
+          const existingProviderLink = await db
+            .select({ id: linkedIdentities.id, userId: linkedIdentities.userId })
+            .from(linkedIdentities)
+            .where(
+              and(
+                eq(linkedIdentities.provider, "telegram"),
+                eq(linkedIdentities.providerUserId, telegramUserId),
+              ),
+            )
+            .limit(1);
+          linkedUserId = existingProviderLink[0]?.userId ?? null;
+        } catch (dbError) {
+          logAuthDebug("telegram", requestId, "db lookup failed while linking", {
+            error: formatErrorForLog(dbError),
+          }, "error");
+        }
+      }
 
-      if (existingProviderLink.length > 0) {
+      if (!linkedUserId) {
+        try {
+          const metadataUser = await findSupabaseUserByTelegramId(telegramUserId, requestId);
+          linkedUserId = metadataUser?.id ?? null;
+        } catch {
+          linkedUserId = null;
+        }
+      }
+
+      if (linkedUserId) {
+        if (linkedUserId === sessionUser.id) {
+          return res.json({
+            ok: true,
+            data: {
+              linked: true,
+              provider: "telegram",
+              userId: sessionUser.id,
+            },
+          });
+        }
+
         logAuthDebug("telegram", requestId, "link attempt conflicts with existing link", {
           userId: sessionUser.id,
           telegramUserId,
-          existingLinkId: existingProviderLink[0].id,
+          linkedUserId,
         }, "error");
         throw new AppError("PROVIDER_CONFLICT", "Telegram account is already linked", 409);
       }
 
-      await db.insert(linkedIdentities).values({
-        userId: sessionUser.id,
-        provider: "telegram",
-        providerUserId: telegramUserId,
-      });
+      const metadataForLink = {
+        ...(sessionUser.user_metadata ?? {}),
+        telegram_user_id: telegramUserId,
+        telegram_username: input.username ?? null,
+      };
+
+      const { error: updateMetadataError } = await getSupabaseAdmin().auth.admin.updateUserById(
+        sessionUser.id,
+        { user_metadata: metadataForLink },
+      );
+
+      if (updateMetadataError) {
+        throw new AppError("AUTH_SERVICE_UNAVAILABLE", "Telegram linking failed", 503);
+      }
+
+      if (db) {
+        await db
+          .insert(linkedIdentities)
+          .values({
+            userId: sessionUser.id,
+            provider: "telegram",
+            providerUserId: telegramUserId,
+          })
+          .onConflictDoNothing({
+            target: [linkedIdentities.provider, linkedIdentities.providerUserId],
+          });
+      }
 
       return res.json({
         ok: true,
@@ -697,24 +1058,42 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
       supabaseConfig: getSupabaseConfigStatus(),
     });
 
-    const existingLink = await db
-      .select({ userId: linkedIdentities.userId })
-      .from(linkedIdentities)
-      .where(
-        and(
-          eq(linkedIdentities.provider, "telegram"),
-          eq(linkedIdentities.providerUserId, telegramUserId),
-        ),
-      )
-      .limit(1);
-
     let userId: string;
+    let existingLinkedUserId: string | null = null;
+    if (db) {
+      try {
+        const existingLink = await db
+          .select({ userId: linkedIdentities.userId })
+          .from(linkedIdentities)
+          .where(
+            and(
+              eq(linkedIdentities.provider, "telegram"),
+              eq(linkedIdentities.providerUserId, telegramUserId),
+            ),
+          )
+          .limit(1);
+        existingLinkedUserId = existingLink[0]?.userId ?? null;
+      } catch (dbError) {
+        logAuthDebug("telegram", requestId, "db lookup failed for telegram login", {
+          error: formatErrorForLog(dbError),
+        }, "error");
+      }
+    }
 
-    if (existingLink.length > 0) {
-      userId = existingLink[0].userId;
-      logAuthDebug("telegram", requestId, "found existing telegram-linked user", {
-        userId,
-      });
+    if (!existingLinkedUserId) {
+      try {
+        const metadataLinkedUser = await findSupabaseUserByTelegramId(telegramUserId, requestId);
+        existingLinkedUserId = metadataLinkedUser?.id ?? null;
+      } catch (lookupError) {
+        logAuthDebug("telegram", requestId, "telegram metadata lookup failed", {
+          error: formatErrorForLog(lookupError),
+        }, "error");
+      }
+    }
+
+    if (existingLinkedUserId) {
+      userId = existingLinkedUserId;
+      logAuthDebug("telegram", requestId, "found existing telegram-linked user", { userId });
     } else {
       const syntheticEmail = `telegram_${telegramUserId}@users.telegram.local`;
       const generatedPassword = randomBytes(48).toString("hex");
@@ -725,25 +1104,57 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
         email_confirm: true,
         user_metadata: {
           name: getTelegramDisplayName(input),
+          telegram_user_id: telegramUserId,
           telegram_username: input.username ?? null,
           signup_provider: "telegram",
         },
       });
 
       if (createError || !created.user) {
-        logAuthDebug("telegram", requestId, "supabase user creation failed", {
-          supabaseError: createError?.message ?? null,
-        }, "error");
-        throw new AppError("CREATE_FAILED", "Failed to create Telegram account", 500);
+        if (createError && createError.message.toLowerCase().includes("already been registered")) {
+          const existingUser = await findSupabaseUserByEmail(syntheticEmail, requestId);
+          if (existingUser) {
+            userId = existingUser.id;
+          } else {
+            throw new AppError("AUTH_SERVICE_UNAVAILABLE", "Telegram login failed", 503);
+          }
+        } else {
+          logAuthDebug("telegram", requestId, "supabase user creation failed", {
+            supabaseError: createError?.message ?? null,
+          }, "error");
+          throw new AppError("CREATE_FAILED", "Failed to create Telegram account", 500);
+        }
+      } else {
+        userId = created.user.id;
       }
 
-      userId = created.user.id;
+      const {
+        data: { user: createdOrExistingUser },
+      } = await getSupabaseAdmin().auth.admin.getUserById(userId);
 
-      await db.insert(linkedIdentities).values({
-        userId,
-        provider: "telegram",
-        providerUserId: telegramUserId,
-      });
+      if (createdOrExistingUser) {
+        const metadata = {
+          ...(createdOrExistingUser.user_metadata ?? {}),
+          telegram_user_id: telegramUserId,
+          telegram_username: input.username ?? null,
+          signup_provider:
+            createdOrExistingUser.user_metadata?.signup_provider ?? "telegram",
+        };
+        await getSupabaseAdmin().auth.admin.updateUserById(userId, { user_metadata: metadata });
+      }
+    }
+
+    if (db) {
+      await db
+        .insert(linkedIdentities)
+        .values({
+          userId,
+          provider: "telegram",
+          providerUserId: telegramUserId,
+        })
+        .onConflictDoNothing({
+          target: [linkedIdentities.provider, linkedIdentities.providerUserId],
+        });
 
       await db
         .insert(studentProfiles)
@@ -781,18 +1192,25 @@ router.get("/me", async (req, res, next) => {
       return res.json({ ok: true, data: { user: null } });
     }
 
-    const db = getDb();
+    let profileRows: any[] = [];
+    let providerRows: { provider: string; linkedAt: Date }[] = [];
+    try {
+      const db = getDb();
+      profileRows = await db
+        .select()
+        .from(studentProfiles)
+        .where(eq(studentProfiles.userId, req.user.id))
+        .limit(1);
 
-    const profileRows = await db
-      .select()
-      .from(studentProfiles)
-      .where(eq(studentProfiles.userId, req.user.id))
-      .limit(1);
-
-    const providerRows = await db
-      .select({ provider: linkedIdentities.provider, linkedAt: linkedIdentities.linkedAt })
-      .from(linkedIdentities)
-      .where(eq(linkedIdentities.userId, req.user.id));
+      providerRows = await db
+        .select({ provider: linkedIdentities.provider, linkedAt: linkedIdentities.linkedAt })
+        .from(linkedIdentities)
+        .where(eq(linkedIdentities.userId, req.user.id));
+    } catch {
+      // Graceful degradation: keep /me available even if DB is temporarily down.
+      profileRows = [];
+      providerRows = [];
+    }
 
     const {
       data: { user: adminUser },
@@ -815,7 +1233,16 @@ router.get("/me", async (req, res, next) => {
       providersMap.set(row.provider, new Date(row.linkedAt).getTime());
     }
 
+    if (typeof adminUser?.user_metadata?.telegram_user_id === "string") {
+      providersMap.set("telegram", Date.now());
+    }
+
     const profile = profileRows[0] ?? null;
+    const usernameFromMetadata =
+      typeof adminUser?.user_metadata?.username === "string"
+        ? normalizeUsername(adminUser.user_metadata.username)
+        : null;
+    const effectiveUsername = profile?.username ?? usernameFromMetadata;
 
     return res.json({
       ok: true,
@@ -823,11 +1250,11 @@ router.get("/me", async (req, res, next) => {
         user: {
           id: req.user.id,
           email: req.user.email ?? null,
-          username: profile?.username ?? null,
+          username: effectiveUsername ?? null,
           name: (req.user.user_metadata?.name as string | undefined) ?? "User",
           isAdmin: 0,
           isVerified: req.user.email_confirmed_at ? 1 : 0,
-          needsUsername: !profile?.username,
+          needsUsername: !effectiveUsername,
         },
         profile,
         providers: Array.from(providersMap.entries()).map(([provider, linkedAt]) => ({
