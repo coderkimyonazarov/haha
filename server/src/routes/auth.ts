@@ -146,17 +146,40 @@ function hasAdminPrivileges(user: {
 }
 
 async function verifyAdminPassword(password: string): Promise<boolean> {
-  const hashedPassword = process.env.ADMIN_PASSWORD_HASH?.trim();
+  const readSecret = (value?: string): string => {
+    const normalized = (value ?? "").trim();
+    if (
+      (normalized.startsWith("\"") && normalized.endsWith("\"")) ||
+      (normalized.startsWith("'") && normalized.endsWith("'"))
+    ) {
+      return normalized.slice(1, -1);
+    }
+    return normalized;
+  };
+
+  const hashedPassword = readSecret(process.env.ADMIN_PASSWORD_HASH);
   if (hashedPassword) {
-    try {
-      return await argon2.verify(hashedPassword, password);
-    } catch {
-      return false;
+    const isArgonHash = hashedPassword.startsWith("$argon2");
+    if (isArgonHash) {
+      try {
+        if (await argon2.verify(hashedPassword, password)) {
+          return true;
+        }
+      } catch {
+        // Ignore and fallback to other configured secret sources below.
+      }
+    } else if (password === hashedPassword) {
+      // Backward compatibility for deployments that accidentally put plaintext in ADMIN_PASSWORD_HASH.
+      return true;
     }
   }
 
-  const plainPassword = process.env.ADMIN_PASSWORD ?? "";
+  const plainPassword = readSecret(process.env.ADMIN_PASSWORD);
   return Boolean(plainPassword) && password === plainPassword;
+}
+
+function normalizeAdminUsername(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function parseInterests(raw: unknown): string[] {
@@ -1841,21 +1864,24 @@ router.post("/admin-login", authLimiter, async (req, res, next) => {
       req.body,
     );
 
-    const username = credentials.username.trim();
+    const username = normalizeAdminUsername(credentials.username);
     const password = credentials.password;
-    const configuredUsername = (process.env.ADMIN_USERNAME || "").trim();
+    const configuredUsernames = (process.env.ADMIN_USERNAME || "")
+      .split(",")
+      .map((value) => normalizeAdminUsername(value))
+      .filter(Boolean);
     const hasConfiguredPassword = Boolean(
-      process.env.ADMIN_PASSWORD_HASH?.trim() || process.env.ADMIN_PASSWORD,
+      (process.env.ADMIN_PASSWORD_HASH || "").trim() || (process.env.ADMIN_PASSWORD || "").trim(),
     );
 
-    if (!configuredUsername || !hasConfiguredPassword) {
+    if (configuredUsernames.length === 0 || !hasConfiguredPassword) {
       throw new AppError("CONFIG_ERROR", "Admin login is not configured", 503);
     }
 
     const passwordMatches = await verifyAdminPassword(password);
     const isProduction = process.env.NODE_ENV === "production";
     if (
-      username === configuredUsername &&
+      configuredUsernames.includes(username) &&
       passwordMatches
     ) {
       const isSecure = isProduction;

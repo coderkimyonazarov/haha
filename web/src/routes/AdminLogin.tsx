@@ -80,7 +80,7 @@ export default function AdminLogin() {
     setSubmitting(true);
     setErrorText("");
     try {
-      await adminLogin({ username, password });
+      await adminLogin({ username: username.trim(), password });
       navigate("/admin");
     } catch (err: any) {
       setErrorText(err?.message || "Invalid credentials. Please try again.");
