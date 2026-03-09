@@ -1,196 +1,127 @@
-import { randomUUID } from "crypto";
-import { supabase } from "../db/supabase";
-import type {
-  BotUser,
-  IdentifierType,
-  IdentityResult,
-  LinkedIdentifier,
-} from "../types";
-import { normalisePhone } from "../types";
+import { config } from "../config";
+import type { BotDashboard, LinkedUser } from "../types";
 
-// ────────────────────────────────────────────────────────────────────────────
-// identifyUser
-// Looks up a user by any identifier type. Returns full user + their linked IDs
-// or null if not found.
-// ────────────────────────────────────────────────────────────────────────────
-export async function identifyUser(
-  value: string,
-  type: IdentifierType,
-): Promise<IdentityResult | null> {
-  const normalised =
-    type === "phone" ? normalisePhone(value) : value.toLowerCase().trim();
+type ApiError = {
+  code?: string;
+  message?: string;
+};
 
-  const { data: linked } = await supabase
-    .from("linked_identifiers")
-    .select("*")
-    .eq("type", type)
-    .eq("value", normalised)
-    .single();
+type ApiEnvelope<T> = {
+  ok: boolean;
+  data?: T;
+  error?: ApiError;
+};
 
-  if (!linked) return null;
+type ResolveUserResponse =
+  | {
+      linked: false;
+      appUrl: string;
+    }
+  | {
+      linked: true;
+      user: LinkedUser;
+    };
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", linked.user_id)
-    .single();
+type LinkWithTokenResponse = {
+  linked: true;
+  user: LinkedUser | null;
+};
 
-  if (!user) return null;
+type AiResponse = {
+  reply: string;
+  mode: string;
+};
 
-  const { data: allLinked } = await supabase
-    .from("linked_identifiers")
-    .select("*")
-    .eq("user_id", user.id);
-
-  return {
-    user: mapUser(user),
-    linkedIds: (allLinked ?? []).map(mapLinked),
-  };
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// identifyByTelegramId
-// Shortcut for Telegram-native lookup (called on every message)
-// ────────────────────────────────────────────────────────────────────────────
-export async function identifyByTelegramId(
-  telegramId: string | number,
-): Promise<IdentityResult | null> {
-  return identifyUser(String(telegramId), "telegram_id");
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// registerUser
-// Creates a new user + initial linked identifier.
-// Returns the new user.
-// ────────────────────────────────────────────────────────────────────────────
-export async function registerUser(params: {
-  name: string;
-  passwordHash: string | null;
-  identifierType: IdentifierType;
-  identifierValue: string;
-  isVerified?: boolean;
-}): Promise<BotUser> {
-  const userId = randomUUID();
-  const normValue =
-    params.identifierType === "phone"
-      ? normalisePhone(params.identifierValue)
-      : params.identifierValue.toLowerCase().trim();
-
-  // Insert user
-  const { data: user, error: userErr } = await supabase
-    .from("users")
-    .insert({
-      id: userId,
-      name: params.name,
-      password_hash: params.passwordHash,
-      is_verified: params.isVerified ?? false,
-    })
-    .select()
-    .single();
-
-  if (userErr || !user)
-    throw new Error(`User insert failed: ${userErr?.message}`);
-
-  // Insert linked identifier
-  const { error: idErr } = await supabase.from("linked_identifiers").insert({
-    user_id: userId,
-    type: params.identifierType,
-    value: normValue,
-    is_verified: params.isVerified ?? false,
-  });
-  if (idErr)
-    throw new Error(`Linked identifier insert failed: ${idErr.message}`);
-
-  return mapUser(user);
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// linkIdentifier
-// Adds a new identifier to an existing user (multi-account linking).
-// ────────────────────────────────────────────────────────────────────────────
-export async function linkIdentifier(
-  userId: string,
-  type: IdentifierType,
-  value: string,
-  isVerified = false,
-): Promise<void> {
-  const normValue =
-    type === "phone" ? normalisePhone(value) : value.toLowerCase().trim();
-
-  // Check if already taken by another user
-  const { data: existing } = await supabase
-    .from("linked_identifiers")
-    .select("user_id")
-    .eq("type", type)
-    .eq("value", normValue)
-    .single();
-
-  if (existing && existing.user_id !== userId) {
-    throw new Error(`This ${type} is already linked to another account.`);
+function formatNetworkError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
   }
+  return new Error(String(error));
+}
 
-  if (existing && existing.user_id === userId) return; // already linked, idempotent
+async function callBackend<T>(
+  path: string,
+  body: Record<string, unknown>,
+  options: { method?: "POST" | "GET" } = {},
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.BOT_REQUEST_TIMEOUT_MS);
 
-  const { error } = await supabase.from("linked_identifiers").insert({
-    user_id: userId,
-    type,
-    value: normValue,
-    is_verified: isVerified,
+  try {
+    const response = await fetch(`${config.BACKEND_API_URL}${path}`, {
+      method: options.method ?? "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-bot-secret": config.BOT_INTERNAL_API_KEY,
+      },
+      body: options.method === "GET" ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    let payload: ApiEnvelope<T> | null = null;
+    try {
+      payload = (await response.json()) as ApiEnvelope<T>;
+    } catch {
+      throw new Error(`Backend returned invalid response (${response.status})`);
+    }
+
+    if (!response.ok || !payload.ok || !payload.data) {
+      const message =
+        payload.error?.message ||
+        `Backend request failed (${response.status})`;
+      throw new Error(message);
+    }
+
+    return payload.data;
+  } catch (error) {
+    throw formatNetworkError(error);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function resolveLinkedUser(
+  telegramUserId: string,
+  telegramUsername?: string,
+): Promise<ResolveUserResponse> {
+  return callBackend<ResolveUserResponse>("/api/bot/resolve-user", {
+    telegramUserId,
+    telegramUsername: telegramUsername || null,
   });
-  if (error) throw new Error(`Link insert failed: ${error.message}`);
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// markIdentifierVerified
-// ────────────────────────────────────────────────────────────────────────────
-export async function markIdentifierVerified(
-  userId: string,
-  type: IdentifierType,
-): Promise<void> {
-  await supabase
-    .from("linked_identifiers")
-    .update({ is_verified: true })
-    .eq("user_id", userId)
-    .eq("type", type);
-
-  // If user has at least one verified identifier, mark account verified
-  await supabase.from("users").update({ is_verified: true }).eq("id", userId);
+export async function linkWithToken(
+  telegramUserId: string,
+  token: string,
+  telegramUsername?: string,
+): Promise<LinkWithTokenResponse> {
+  return callBackend<LinkWithTokenResponse>("/api/bot/link-with-token", {
+    telegramUserId,
+    telegramUsername: telegramUsername || null,
+    token,
+  });
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// getUserById
-// ────────────────────────────────────────────────────────────────────────────
-export async function getUserById(userId: string): Promise<BotUser | null> {
-  const { data } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", userId)
-    .single();
-  return data ? mapUser(data) : null;
+export async function getBotDashboard(
+  telegramUserId: string,
+  telegramUsername?: string,
+): Promise<BotDashboard> {
+  return callBackend<BotDashboard>("/api/bot/dashboard", {
+    telegramUserId,
+    telegramUsername: telegramUsername || null,
+  });
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Mappers (snake_case DB → camelCase TS)
-// ────────────────────────────────────────────────────────────────────────────
-function mapUser(row: any): BotUser {
-  return {
-    id: row.id,
-    name: row.name,
-    passwordHash: row.password_hash ?? null,
-    isVerified: row.is_verified,
-    isAdmin: row.is_admin,
-    isBanned: row.is_banned,
-    createdAt: row.created_at,
-  };
-}
-
-function mapLinked(row: any): LinkedIdentifier {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    type: row.type,
-    value: row.value,
-    isVerified: row.is_verified,
-    linkedAt: row.linked_at,
-  };
+export async function askBotAi(params: {
+  telegramUserId: string;
+  telegramUsername?: string;
+  message: string;
+  context?: "SAT" | "Admissions" | "General";
+}): Promise<AiResponse> {
+  return callBackend<AiResponse>("/api/bot/ai", {
+    telegramUserId: params.telegramUserId,
+    telegramUsername: params.telegramUsername || null,
+    message: params.message,
+    context: params.context ?? "General",
+  });
 }

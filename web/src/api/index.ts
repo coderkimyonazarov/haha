@@ -111,6 +111,13 @@ export type TelegramConfig = {
   error: string | null;
 };
 
+export type TelegramBotLinkToken = {
+  token: string;
+  deepLink: string | null;
+  botUsername: string | null;
+  expiresAt: string;
+};
+
 export type University = {
   id: string;
   name: string;
@@ -162,6 +169,12 @@ export async function telegramAuth(data: Record<string, unknown>) {
 
 export async function getTelegramConfig() {
   return apiFetch<TelegramConfig>("/api/auth/telegram/config", {}, { silent: true });
+}
+
+export async function createTelegramBotLinkToken() {
+  return apiFetch<TelegramBotLinkToken>("/api/bot/link-token", {
+    method: "POST",
+  });
 }
 
 export async function googleAuth(credential: string) {

@@ -1,8 +1,10 @@
 import React from "react";
 import {
+  TelegramBotLinkToken,
   Persona,
   TelegramConfig,
   Theme,
+  createTelegramBotLinkToken,
   getProviders,
   getTelegramConfig,
   linkTelegram,
@@ -23,6 +25,8 @@ import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
 import {
   CheckCircle2,
+  Copy,
+  ExternalLink,
   Loader2,
   Palette,
   Send,
@@ -67,6 +71,8 @@ export default function AccountSettings() {
   const [savingUsername, setSavingUsername] = React.useState(false);
   const [unlinking, setUnlinking] = React.useState<string | null>(null);
   const [linkingGoogle, setLinkingGoogle] = React.useState(false);
+  const [creatingBotToken, setCreatingBotToken] = React.useState(false);
+  const [botLinkToken, setBotLinkToken] = React.useState<TelegramBotLinkToken | null>(null);
   const [telegramInfo, setTelegramInfo] = React.useState<{
     enabled: TelegramConfig["enabled"];
     botUsername: TelegramConfig["botUsername"];
@@ -279,6 +285,32 @@ export default function AccountSettings() {
       toast.error(error?.message || "Failed to unlink provider");
     } finally {
       setUnlinking(null);
+    }
+  };
+
+  const handleCreateBotLinkToken = async () => {
+    if (creatingBotToken) {
+      return;
+    }
+
+    setCreatingBotToken(true);
+    try {
+      const tokenData = await createTelegramBotLinkToken();
+      setBotLinkToken(tokenData);
+      toast.success("Telegram bot link generated.");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to generate bot link token");
+    } finally {
+      setCreatingBotToken(false);
+    }
+  };
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
     }
   };
 
@@ -512,6 +544,60 @@ export default function AccountSettings() {
                   : telegramInfo?.error || "Bot is not configured."
               )}
             </p>
+
+            <div className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-background/60 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Secure Bot Linking
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Generate one-time token and open Telegram bot with ready deep link. Token expires in 15 minutes.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleCreateBotLinkToken}
+                disabled={creatingBotToken}
+              >
+                {creatingBotToken ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Generate secure bot link
+              </Button>
+
+              {botLinkToken ? (
+                <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground">Token</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(botLinkToken.token, "Token")}
+                      className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-xs hover:bg-background"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                  <code className="block break-all rounded-md bg-background px-2 py-1 text-[11px]">
+                    {botLinkToken.token}
+                  </code>
+
+                  {botLinkToken.deepLink ? (
+                    <a
+                      href={botLinkToken.deepLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-95"
+                    >
+                      Open Telegram Bot
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : null}
+
+                  <p className="text-[11px] text-muted-foreground">
+                    Expires: {new Date(botLinkToken.expiresAt).toLocaleString()}
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>

@@ -12,6 +12,8 @@ import { useAuth } from "../lib/auth";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import BrandMotionLogo from "../components/BrandMotionLogo";
+import BrandSplash from "../components/BrandSplash";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -225,7 +227,7 @@ export default function Onboarding() {
   };
 
   if (loading) {
-    return <div className="p-8 text-muted-foreground">Loading onboarding...</div>;
+    return <BrandSplash compact message="Loading your onboarding profile..." />;
   }
 
   return (
@@ -240,8 +242,11 @@ export default function Onboarding() {
               </p>
               <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Build your personalized workspace</h1>
             </div>
-            <div className="hidden rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-sm font-semibold sm:block">
-              Step {step + 1} / {STEPS.length}
+            <div className="hidden items-center gap-3 sm:flex">
+              <BrandMotionLogo className="w-28" decorative />
+              <div className="rounded-2xl border border-border/60 bg-background/80 px-4 py-3 text-sm font-semibold">
+                Step {step + 1} / {STEPS.length}
+              </div>
             </div>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-muted/60">

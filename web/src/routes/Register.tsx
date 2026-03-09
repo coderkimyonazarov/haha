@@ -1,10 +1,12 @@
 import React from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { getTelegramConfig, register, telegramAuth } from "../api";
+import { getTelegramConfig, me, register, telegramAuth } from "../api";
 import { supabase } from "../lib/supabase";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import BrandMotionLogo from "../components/BrandMotionLogo";
+import BrandSplash from "../components/BrandSplash";
 import { useAuth } from "../lib/auth";
 import { getPostAuthPath } from "../lib/authRedirect";
 import {
@@ -14,7 +16,7 @@ import {
   isAuthRateLimitError,
 } from "../lib/authErrors";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Command } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import gsap from "gsap";
 
 const SIGNUP_COOLDOWN_KEY = "sypev_signup_cooldown_until";
@@ -137,7 +139,8 @@ export default function Register() {
 
       await refreshProfile();
       toast.success("Registration successful.");
-      navigate("/dashboard");
+      const current = await me();
+      navigate(getPostAuthPath(current.user), { replace: true });
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error("email registration failed", err);
@@ -208,13 +211,15 @@ export default function Register() {
         const res = await telegramAuth(user);
         if ("accessToken" in res) {
           await setTelegramSession(res.accessToken);
-          navigate("/set-username");
+          const current = await me();
+          navigate(getPostAuthPath(current.user), { replace: true });
           return;
         }
 
         if ("linked" in res) {
           await refreshProfile();
-          navigate("/dashboard");
+          const current = await me();
+          navigate(getPostAuthPath(current.user), { replace: true });
           return;
         }
 
@@ -240,6 +245,7 @@ export default function Register() {
 
   React.useEffect(() => {
     let cancelled = false;
+    let widgetHealthTimer: number | null = null;
     const container = document.getElementById("telegram-register-container");
     if (!container) {
       return;
@@ -276,6 +282,19 @@ export default function Register() {
 
         container.replaceChildren();
         container.appendChild(script);
+
+        widgetHealthTimer = window.setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
+          const hasIframe = Boolean(container.querySelector("iframe"));
+          if (!hasIframe) {
+            setTelegramEnabled(false);
+            setTelegramMessage(
+              "Telegram widget could not load. Check BotFather domain and refresh the page.",
+            );
+          }
+        }, 3500);
       } catch (error: any) {
         setTelegramEnabled(false);
         setTelegramMessage(error?.message || "Telegram registration is currently unavailable.");
@@ -286,9 +305,16 @@ export default function Register() {
 
     return () => {
       cancelled = true;
+      if (widgetHealthTimer !== null) {
+        window.clearTimeout(widgetHealthTimer);
+      }
       container.querySelector("script")?.remove();
     };
   }, []);
+
+  if (loading) {
+    return <BrandSplash compact message="Checking your auth session..." />;
+  }
 
   return (
     <div className="min-h-screen flex w-full relative overflow-hidden bg-background">
@@ -297,8 +323,13 @@ export default function Register() {
       <div className="flex-1 grid lg:grid-cols-2 relative z-10 w-full max-w-[1400px] mx-auto">
         <div className="hidden lg:flex flex-col justify-between p-12 pr-20 animate-element">
           <div>
-            <div className="flex items-center gap-2 mb-16">
-              <Command className="w-8 h-8 text-primary" />
+            <div className="flex items-center gap-3 mb-16">
+              <img
+                src="/brand/sypev-logo.png"
+                alt="Sypev logo"
+                className="h-10 w-auto rounded-md border border-border/70 bg-background px-2 py-1"
+                loading="lazy"
+              />
               <span className="text-2xl font-bold tracking-tight">Sypev</span>
             </div>
 
@@ -311,6 +342,10 @@ export default function Register() {
             <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
               Create your account with Supabase Auth and complete your profile once, then use any linked identity to sign in.
             </p>
+
+            <div className="mt-10 inline-flex rounded-2xl border border-border/70 bg-card/80 p-3">
+              <BrandMotionLogo className="w-44" alt="Sypev brand animation preview" />
+            </div>
           </div>
         </div>
 
@@ -396,20 +431,21 @@ export default function Register() {
                       : "Continue with Google"}
                 </Button>
                 {oauthInlineMessage ? (
-                  <div className="w-full rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  <div className="w-full rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
                     {oauthInlineMessage}
                   </div>
                 ) : null}
 
-                <div
-                  id="telegram-register-container"
-                  className={`flex min-h-12 justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm transition-shadow w-full rounded-2xl border border-border/70 bg-card/80 p-2 ${isAnyLoading || cooldownActive || !telegramEnabled ? "pointer-events-none opacity-60" : ""}`}
-                />
-                {!telegramEnabled && telegramMessage ? (
-                  <div className="w-full rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
-                    {telegramMessage}
+                {telegramEnabled ? (
+                  <div
+                    id="telegram-register-container"
+                    className={`flex min-h-12 justify-center [&>iframe]:rounded-2xl overflow-hidden shadow-sm transition-shadow w-full rounded-2xl border border-border/70 bg-card/80 p-2 ${isAnyLoading || cooldownActive ? "pointer-events-none opacity-60" : ""}`}
+                  />
+                ) : (
+                  <div className="w-full rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-800 dark:text-sky-100">
+                    {telegramMessage || "Telegram registration is currently unavailable."}
                   </div>
-                ) : null}
+                )}
                 {telegramLoading && <p className="text-xs text-muted-foreground">Authenticating with Telegram...</p>}
               </div>
 

@@ -14,6 +14,7 @@ import {
 import { Button } from "../components/ui/button";
 import { useAuth } from "../lib/auth";
 import FunBlock from "../components/FunBlock";
+import BrandMotionLogo from "../components/BrandMotionLogo";
 
 function getAiSuggestion(params: {
   firstName: string;
@@ -25,19 +26,19 @@ function getAiSuggestion(params: {
   const topInterest = interests[0] ?? "study";
   const scoreLine =
     typeof satTotal === "number"
-      ? `Your current SAT total is ${satTotal}, so focus on the weakest subsection first.`
-      : "No SAT baseline detected yet, so create a diagnostic score to unlock stronger recommendations.";
+      ? `Current SAT total: ${satTotal}. Prioritize your lowest subsection first.`
+      : "No SAT baseline yet. Start with a diagnostic block to unlock sharper guidance.";
 
   const personaLine =
     persona === "bold_dark"
-      ? "Use 40-minute deep-work blocks with strict breaks."
+      ? "Run 40-minute deep-focus sessions with strict breaks."
       : persona === "soft_cute"
-        ? "Use gentler 20-minute focus cycles to keep momentum stable."
+        ? "Use calmer 20-minute focus cycles to protect consistency."
         : persona === "energetic_fun"
-          ? "Keep study dynamic: short cycles, visible checkpoints, quick wins."
-          : "Keep your plan minimal: top 3 priorities only.";
+          ? "Keep it dynamic: short cycles, checkpoints, visible progress."
+          : "Stay minimal: three top priorities and clean execution.";
 
-  return `${firstName}, based on your ${topInterest} interest: ${scoreLine} ${personaLine}`;
+  return `${firstName}, aligned with your ${topInterest} interest. ${scoreLine} ${personaLine}`;
 }
 
 export default function Dashboard() {
@@ -55,33 +56,36 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 pb-20">
-      <section className="overflow-hidden rounded-3xl border border-border/70 bg-card/80 p-6 sm:p-8">
+      <section className="brand-frame overflow-hidden p-6 sm:p-8">
         <div className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
           <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Personalized Hub</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Sypev Workspace</p>
             <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-              Welcome back, <span className="text-primary">{firstName}</span>
+              Welcome back, <span className="text-foreground">{firstName}</span>
             </h1>
             <p className="max-w-xl text-base text-muted-foreground">
-              Your dashboard adapts to your profile, persona, and interests to keep every session
-              more relevant.
+              Your dashboard is personalized by profile, persona, and interests so every session
+              stays focused and relevant.
             </p>
+
             <div className="flex flex-wrap gap-2">
               {interests.length > 0 ? (
                 interests.map((interest: string) => (
                   <span
                     key={interest}
-                    className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold capitalize text-primary"
+                    className="rounded-full border border-border/80 bg-card px-3 py-1 text-xs font-semibold capitalize text-foreground"
                   >
                     {interest}
                   </span>
                 ))
               ) : (
-                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                  Add interests in onboarding/settings
-                </span>
+                <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                  <BrandMotionLogo className="w-16" decorative />
+                  <span>Add interests in onboarding/settings to unlock deeper personalization.</span>
+                </div>
               )}
             </div>
+
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Button asChild>
                 <Link to="/study/sat">
@@ -105,8 +109,8 @@ export default function Dashboard() {
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Telegram</p>
               <p className="mt-2 text-sm leading-relaxed">
                 {telegramLinked
-                  ? "Telegram is linked to this account. You can use Telegram login safely."
-                  : "Telegram is not linked yet. Link it from Account to enable one-tap Telegram sign-in."}
+                  ? "Telegram is linked to this profile. Bot and web are running in one unified account."
+                  : "Telegram is not linked yet. Link it in Account to enable one-tap sign-in and bot sync."}
               </p>
               <Button asChild variant="ghost" className="mt-2 px-0">
                 <Link to="/account">
@@ -122,20 +126,20 @@ export default function Dashboard() {
       <section className="grid gap-4 md:grid-cols-3">
         <Link
           to="/study/sat"
-          className="rounded-2xl border border-border/70 bg-card/70 p-5 transition-colors hover:border-primary/40"
+          className="rounded-2xl border border-border/70 bg-card/80 p-5 transition-colors hover:border-foreground/30"
         >
-          <BookOpen className="h-6 w-6 text-primary" />
+          <BookOpen className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">SAT Engine</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Practice by topic and monitor score progression with cleaner feedback.
+            Practice by topic and monitor progression with cleaner feedback.
           </p>
         </Link>
 
         <Link
           to="/admissions"
-          className="rounded-2xl border border-border/70 bg-card/70 p-5 transition-colors hover:border-primary/40"
+          className="rounded-2xl border border-border/70 bg-card/80 p-5 transition-colors hover:border-foreground/30"
         >
-          <GraduationCap className="h-6 w-6 text-primary" />
+          <GraduationCap className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">Admissions Radar</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Match safety/target/reach universities from your updated profile.
@@ -144,19 +148,19 @@ export default function Dashboard() {
 
         <Link
           to="/tutor"
-          className="rounded-2xl border border-border/70 bg-card/70 p-5 transition-colors hover:border-primary/40"
+          className="rounded-2xl border border-border/70 bg-card/80 p-5 transition-colors hover:border-foreground/30"
         >
-          <Brain className="h-6 w-6 text-primary" />
+          <Brain className="h-6 w-6 text-foreground" />
           <h3 className="mt-3 text-xl font-semibold">AI Counselor</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ask tailored questions with your persona and interests in context.
+            Ask tailored questions with persona + interests in context.
           </p>
         </Link>
       </section>
 
-      <section className="rounded-2xl border border-border/70 bg-card/70 p-5">
+      <section className="rounded-2xl border border-border/70 bg-card/80 p-5">
         <div className="flex items-center gap-2">
-          <Palette className="h-5 w-5 text-primary" />
+          <Palette className="h-5 w-5 text-foreground" />
           <h3 className="text-lg font-semibold">Current style profile</h3>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -173,7 +177,7 @@ export default function Dashboard() {
           <div className="rounded-xl border border-border/70 bg-background/70 p-3">
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Bot + Link</p>
             <p className="mt-1 text-sm font-semibold flex items-center gap-2">
-              <Bot className="h-4 w-4 text-primary" />
+              <Bot className="h-4 w-4 text-foreground" />
               {telegramLinked ? "Linked" : "Not linked"}
             </p>
           </div>
@@ -181,9 +185,9 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5">
+        <article className="rounded-2xl border border-border/70 bg-card/85 p-5">
           <div className="flex items-center gap-2">
-            <Rocket className="h-5 w-5 text-emerald-600" />
+            <Rocket className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Yangi funksiyalar</h3>
           </div>
           <ul className="mt-3 space-y-2 text-sm text-foreground/90">
@@ -197,9 +201,9 @@ export default function Dashboard() {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
+        <article className="rounded-2xl border border-border/70 bg-card/85 p-5">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-amber-600" />
+            <ShieldAlert className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Aniqlangan xatolar/risklar va tuzatish ishlari</h3>
           </div>
           <ul className="mt-3 space-y-2 text-sm text-foreground/90">
@@ -209,9 +213,9 @@ export default function Dashboard() {
           </ul>
         </article>
 
-        <article className="rounded-2xl border border-sky-500/25 bg-sky-500/5 p-5">
+        <article className="rounded-2xl border border-border/70 bg-card/85 p-5">
           <div className="flex items-center gap-2">
-            <Clock3 className="h-5 w-5 text-sky-600" />
+            <Clock3 className="h-5 w-5 text-foreground" />
             <h3 className="text-lg font-semibold">Kelgusi 24 soat ichida bajariladigan ishlar</h3>
           </div>
           <ul className="mt-3 space-y-2 text-sm text-foreground/90">

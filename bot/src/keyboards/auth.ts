@@ -1,72 +1,67 @@
-import { InlineKeyboard, Keyboard } from "grammy";
+import { InlineKeyboard } from "grammy";
 
-// ─── Reply keyboards (shown in text field) ────────────────────────────────────
-
-export const mainMenuKeyboard = new Keyboard()
-  .text("🔑 Kirish")
-  .text("📝 Ro'yxat")
-  .row()
-  .text("ℹ️ Haqida")
-  .resized()
-  .oneTime();
-
-export const shareContactKeyboard = new Keyboard()
-  .requestContact("📱 Telefon raqamni ulashish")
-  .row()
-  .text("❌ Bekor qilish")
-  .resized()
-  .oneTime();
-
-export const cancelKeyboard = new Keyboard()
-  .text("❌ Bekor qilish")
-  .resized()
-  .oneTime();
-
-export const removeKeyboard = new Keyboard().resized();
-
-// ─── Inline keyboards ─────────────────────────────────────────────────────────
-
-/** Shown when identifier is not found — offer seamless register */
-export function unknownIdentifierKeyboard(identifier: string) {
+export function guestKeyboard(webUrl: string) {
   return new InlineKeyboard()
-    .text(`✅ ${identifier} bilan ro'yxatdan o'tish`, `register:${identifier}`)
+    .url("Open Sypev Web", `${webUrl}/login`)
     .row()
-    .text("📝 Boshqa ma'lumot kiriting", "retry_identifier");
+    .text("Link Account", "prompt_link")
+    .text("Help", "open_help");
 }
 
-/** Offered when login succeeds — profile or link account */
-export function postLoginKeyboard() {
+export function dashboardKeyboard(links: {
+  dashboard: string;
+  account: string;
+  tutor: string;
+  onboarding: string;
+}) {
   return new InlineKeyboard()
-    .text("👤 Profilim", "profile")
-    .text("🔗 Hisob ulash", "link_account")
+    .text("Refresh", "refresh_dashboard")
+    .text("Profile", "open_profile")
     .row()
-    .text("🚪 Chiqish", "logout");
+    .text("Today", "open_today")
+    .text("Tasks", "open_tasks")
+    .row()
+    .text("Deadlines", "open_deadlines")
+    .text("AI", "prompt_ai")
+    .row()
+    .url("Open Dashboard", links.dashboard)
+    .url("Open Settings", links.account)
+    .row()
+    .url("Open Tutor", links.tutor);
 }
 
-/** OTP actions */
-export function otpActionsKeyboard() {
+export function profileKeyboard(accountUrl: string) {
   return new InlineKeyboard()
-    .text("🔄 Kodni qayta yuborish", "resend_otp")
+    .url("Edit in Web", accountUrl)
     .row()
-    .text("❌ Bekor qilish", "cancel");
+    .text("Back to Dashboard", "refresh_dashboard")
+    .text("Help", "open_help");
 }
 
-/** Shown to verified user on /profile */
-export function profileKeyboard(hasEmail: boolean, hasPhone: boolean) {
-  const kb = new InlineKeyboard();
-  if (!hasEmail) kb.text("📧 Email ulash", "link_email").row();
-  if (!hasPhone) kb.text("📱 Telefon ulash", "link_phone").row();
-  kb.text("🔄 Parolni o'zgartirish", "change_password").row();
-  kb.text("🚪 Chiqish", "logout");
-  return kb;
+export function settingsKeyboard(links: { account: string; onboarding: string }) {
+  return new InlineKeyboard()
+    .url("Open Account Settings", links.account)
+    .row()
+    .url("Complete Onboarding", links.onboarding)
+    .row()
+    .text("Back", "refresh_dashboard");
 }
 
-/** Password reset options */
-export function forgotPasswordKeyboard() {
+export function quizKeyboard(quizId: number, optionsCount: number) {
+  const keyboard = new InlineKeyboard();
+  for (let i = 0; i < optionsCount; i += 1) {
+    keyboard.text(String.fromCharCode(65 + i), `quiz:${quizId}:${i}`);
+    if ((i + 1) % 2 === 0 && i < optionsCount - 1) {
+      keyboard.row();
+    }
+  }
+  return keyboard.row().text("New Quiz", "new_quiz");
+}
+
+export function helpKeyboard(webUrl: string) {
   return new InlineKeyboard()
-    .text("📧 Email orqali tiklash", "reset_via_email")
+    .url("Open Web App", `${webUrl}/dashboard`)
     .row()
-    .text("📱 Telefon orqali tiklash", "reset_via_phone")
-    .row()
-    .text("❌ Bekor qilish", "cancel");
+    .text("Link Account", "prompt_link")
+    .text("Ask AI", "prompt_ai");
 }

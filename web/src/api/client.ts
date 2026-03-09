@@ -8,7 +8,42 @@ export type ApiError = {
   status?: number;
 };
 
-const BASE_URL = import.meta.env.VITE_API_URL || "";
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function stripTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+function resolveBaseUrl(): string {
+  const configured = String(import.meta.env.VITE_API_URL || "").trim();
+  if (!configured) {
+    return "";
+  }
+
+  if (typeof window === "undefined") {
+    return stripTrailingSlash(configured);
+  }
+
+  try {
+    const parsed = new URL(configured, window.location.origin);
+    const currentHost = window.location.hostname.toLowerCase();
+    const targetHost = parsed.hostname.toLowerCase();
+
+    const currentIsLoopback = LOOPBACK_HOSTS.has(currentHost);
+    const targetIsLoopback = LOOPBACK_HOSTS.has(targetHost);
+
+    // In production/public hosts never call localhost API.
+    if (!currentIsLoopback && targetIsLoopback) {
+      return "";
+    }
+
+    return stripTrailingSlash(parsed.toString());
+  } catch {
+    return "";
+  }
+}
+
+const BASE_URL = resolveBaseUrl();
 export const CUSTOM_AUTH_TOKEN_KEY = "sypev_custom_access_token";
 
 export function getCustomAccessToken(): string | null {

@@ -147,3 +147,22 @@ export const userPreferences = pgTable("user_preferences", {
   funCardEnabled: boolean("fun_card_enabled").notNull().default(true),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// ── Telegram Bot Link Tokens ─────────────────────────────────────────────────
+// One-time codes generated from authenticated web sessions and consumed by bot.
+export const botLinkTokens = pgTable(
+  "bot_link_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    tokenHashUniqueIdx: uniqueIndex("bot_link_tokens_token_hash_uid").on(table.tokenHash),
+    userIdIdx: index("bot_link_tokens_user_id_idx").on(table.userId),
+    expiresAtIdx: index("bot_link_tokens_expires_at_idx").on(table.expiresAt),
+  }),
+);

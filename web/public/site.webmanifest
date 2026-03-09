@@ -1,0 +1,16 @@
+{
+  "name": "Sypev",
+  "short_name": "Sypev",
+  "description": "Premium SAT and admissions platform with AI and Telegram integration.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f6",
+  "theme_color": "#0f1013",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "500x500",
+      "type": "image/png"
+    }
+  ]
+}

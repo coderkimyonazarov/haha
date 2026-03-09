@@ -1,165 +1,98 @@
-import "./config"; // ← validates env vars on startup
-import { Bot, Context, session } from "grammy";
-import {
-  type Conversation,
-  type ConversationFlavor,
-  conversations,
-  createConversation,
-} from "@grammyjs/conversations";
-import { SupabaseAdapter } from "@grammyjs/storage-supabase";
-import { supabase } from "./db/supabase";
+import { Bot, session } from "grammy";
+
 import { config } from "./config";
-import type { SessionData } from "./types";
-
-// ─── Conversations ─────────────────────────────────────────────────────────────
-import { registerConversation } from "./conversations/register";
-import { loginConversation } from "./conversations/login";
-import { linkAccountConversation } from "./conversations/linkAccount";
-
-// ─── Handlers ─────────────────────────────────────────────────────────────────
-import {
-  handleStart,
-  handleProfile,
-  handleLogout,
-  handleHelp,
-} from "./handlers/commands";
-
-// ─── Middleware ────────────────────────────────────────────────────────────────
+import type { BotContext, BotSession } from "./types";
 import { generalRateLimit } from "./middleware/rateLimit";
+import { requestLogger } from "./middleware/logger";
+import {
+  commandAi,
+  commandDashboard,
+  commandDeadlines,
+  commandHelp,
+  commandLink,
+  commandPlan,
+  commandProfile,
+  commandQuiz,
+  commandSettings,
+  commandStart,
+  commandTasks,
+  commandToday,
+  handleAiMessage,
+  handlePendingLinkTokenMessage,
+} from "./handlers/commands";
+import { handleCallback } from "./handlers/callbacks";
 
-// ─── Context type ─────────────────────────────────────────────────────────────
-export type BotContext = Context & ConversationFlavor<Context>;
-export type BotConversation = Conversation<BotContext>;
-
-// ─── Create bot ───────────────────────────────────────────────────────────────
 const bot = new Bot<BotContext>(config.BOT_TOKEN);
 
-// ── 1. Rate limiting (first middleware — blocks floods before any processing)
+bot.use(requestLogger);
 bot.use(generalRateLimit);
-
-// ── 2. Session: stored in Supabase bot_sessions table  ────────────────────────
 bot.use(
-  session<SessionData, BotContext>({
-    initial: (): SessionData => ({}),
-    storage: new SupabaseAdapter({ supabase, table: "bot_sessions" }),
-    getSessionKey: (ctx) => (ctx.chat ? String(ctx.chat.id) : undefined),
+  session<BotSession, BotContext>({
+    initial: () => ({
+      aiMode: false,
+      pendingLinkToken: false,
+      lastQuizId: null,
+      lastActionAt: 0,
+      lastBrandAnimationAt: 0,
+    }),
   }),
 );
 
-// ── 3. Conversations plugin ────────────────────────────────────────────────────
-bot.use(conversations());
-bot.use(createConversation(registerConversation, "register"));
-bot.use(createConversation(loginConversation, "login"));
-bot.use(createConversation(linkAccountConversation, "link_account"));
+bot.command("start", commandStart);
+bot.command("link", commandLink);
+bot.command("profile", commandProfile);
+bot.command("dashboard", commandDashboard);
+bot.command("plan", commandPlan);
+bot.command("today", commandToday);
+bot.command("tasks", commandTasks);
+bot.command("deadlines", commandDeadlines);
+bot.command("quiz", commandQuiz);
+bot.command("ai", commandAi);
+bot.command("settings", commandSettings);
+bot.command("help", commandHelp);
 
-// ─── Commands ─────────────────────────────────────────────────────────────────
-bot.command("start", handleStart);
-bot.command("login", (ctx) => ctx.conversation.enter("login"));
-bot.command("register", (ctx) => ctx.conversation.enter("register"));
-bot.command("profile", handleProfile);
-bot.command("link", (ctx) => ctx.conversation.enter("link_account"));
-bot.command("logout", handleLogout);
-bot.command("help", handleHelp);
+bot.on("callback_query:data", handleCallback);
 
-// ─── Reply keyboard text handlers ─────────────────────────────────────────────
-bot.hears("🔑 Kirish", (ctx) => ctx.conversation.enter("login"));
-bot.hears("📝 Ro'yxat", (ctx) => ctx.conversation.enter("register"));
-bot.hears("ℹ️ Haqida", handleHelp);
-bot.hears("❌ Bekor qilish", async (ctx) => {
-  await ctx.conversation.exit();
-  await ctx.reply("❌ Amal bekor qilindi.", {
-    reply_markup: { remove_keyboard: true },
-  });
-});
+bot.on("message:text", async (ctx) => {
+  const text = ctx.message.text.trim();
 
-// ─── Inline button callbacks ──────────────────────────────────────────────────
-bot.callbackQuery("profile", handleProfile);
-bot.callbackQuery("logout", handleLogout);
-bot.callbackQuery("cancel", async (ctx) => {
-  await ctx.conversation.exit();
-  await ctx.answerCallbackQuery();
-  await ctx.reply("❌ Amal bekor qilindi.", {
-    reply_markup: { remove_keyboard: true },
-  });
-});
-
-// Seamless register from unknown identifier callback
-bot.callbackQuery(/^register:(.+)$/, async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.conversation.enter("register");
-});
-
-bot.callbackQuery("retry_identifier", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.conversation.enter("login");
-});
-
-bot.callbackQuery("link_account", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.conversation.enter("link_account");
-});
-
-bot.callbackQuery("link_email", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.conversation.enter("link_account");
-});
-bot.callbackQuery("link_phone", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.conversation.enter("link_account");
-});
-
-// ─── Contact sharing (Telegram phone verification) ────────────────────────────
-bot.on("message:contact", async (ctx) => {
-  const contact = ctx.message.contact;
-  if (!contact.phone_number) return;
-
-  const userId = ctx.session.userId;
-  if (!userId) {
-    await ctx.reply(`🔒 Avval kiring: /login`);
+  if (text.startsWith("/")) {
     return;
   }
 
-  const { linkIdentifier, markIdentifierVerified } =
-    await import("./services/auth");
+  if (await handlePendingLinkTokenMessage(ctx)) {
+    return;
+  }
+
+  if (ctx.session.aiMode) {
+    await handleAiMessage(ctx);
+    return;
+  }
+
+  await ctx.reply(
+    "✨ Use /dashboard for your personalized hub, /ai for study help, or /help for all commands.",
+  );
+});
+
+bot.catch(async (error) => {
+  const updateId = error.ctx.update.update_id;
+  // eslint-disable-next-line no-console
+  console.error(`[bot][fatal] update=${updateId}`, error.error);
+
   try {
-    await linkIdentifier(userId, "phone", contact.phone_number, true);
-    await markIdentifierVerified(userId, "phone");
-    await ctx.reply(
-      `✅ Telefon raqam <code>${contact.phone_number}</code> hisobingizga ulandi!`,
-      { parse_mode: "HTML", reply_markup: { remove_keyboard: true } },
+    await error.ctx.reply(
+      "⚠️ Something went wrong on our side. Please retry in a moment.",
     );
-  } catch (err: any) {
-    await ctx.reply(`❌ Xatolik: ${err.message}`, {
-      reply_markup: { remove_keyboard: true },
-    });
+  } catch {
+    // ignore secondary delivery failures
   }
 });
 
-// ─── Fallback ─────────────────────────────────────────────────────────────────
-bot.on("message", async (ctx) => {
-  if (ctx.message.text?.startsWith("/")) {
-    await ctx.reply(`❓ Noma'lum buyruq. Ko'rish uchun /help`);
-    return;
-  }
-  // Otherwise silently ignore (conversations handle their own waits)
-});
-
-// ─── Error handler ────────────────────────────────────────────────────────────
-bot.catch((err) => {
-  const ctx = err.ctx;
-  console.error(`[Bot Error] Update ${ctx.update.update_id}:`, err.error);
-  ctx
-    .reply("⚠️ Kutilmagan xato yuz berdi. Iltimos, qaytadan urinib ko'ring.")
-    .catch(() => {});
-});
-
-// ─── Start polling ─────────────────────────────────────────────────────────────
 bot.start({
-  onStart: (info) => {
-    console.log(`🤖 @${info.username} started — ${new Date().toISOString()}`);
-    console.log(`📦 Environment: ${config.NODE_ENV}`);
-    if (config.SMTP_HOST) console.log(`📧 SMTP: ${config.SMTP_HOST}`);
-    if (config.ADMIN_CHAT_ID)
-      console.log(`🔔 Admin alerts → ${config.ADMIN_CHAT_ID}`);
+  onStart: (me) => {
+    // eslint-disable-next-line no-console
+    console.log(`[bot] @${me.username} started (${config.NODE_ENV})`);
+    // eslint-disable-next-line no-console
+    console.log(`[bot] backend=${config.BACKEND_API_URL}`);
   },
 });

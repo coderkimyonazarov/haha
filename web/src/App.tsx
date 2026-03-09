@@ -1,9 +1,14 @@
 import { gsap } from "gsap";
 import React from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Moon, Monitor, Sun } from "lucide-react";
+
 import { Button } from "./components/ui/button";
+import BrandSplash from "./components/BrandSplash";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { adminMe, updatePreferences } from "./api";
+import { useGoogleAnalytics } from "./lib/analytics";
+
 import Admissions from "./routes/Admissions";
 import AdminPanel from "./routes/AdminPanel";
 import Dashboard from "./routes/Dashboard";
@@ -21,13 +26,23 @@ import ForgotPassword from "./routes/ForgotPassword";
 import ResetPassword from "./routes/ResetPassword";
 import AccountSettings from "./routes/AccountSettings";
 import ContentFeed from "./routes/ContentFeed";
-import { Moon, Sun, Monitor } from "lucide-react";
+import { applyRouteSeo } from "./lib/seo";
+
+function SeoManager() {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    applyRouteSeo(location.pathname);
+  }, [location.pathname]);
+
+  return null;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) {
-    return <div className="p-10 text-muted-foreground">Loading...</div>;
+    return <BrandSplash compact message="Preparing your personalized dashboard..." />;
   }
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -54,23 +69,9 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
       .catch(() => setAdminOk(false));
   }, []);
 
-  if (adminOk === null)
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          background: "#050505",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#6366f1",
-          fontFamily: "'Space Grotesk', sans-serif",
-          fontSize: 18,
-        }}
-      >
-        Authenticating…
-      </div>
-    );
+  if (adminOk === null) {
+    return <BrandSplash compact message="Verifying admin session..." />;
+  }
   if (!adminOk) return <Navigate to="/admin/login" replace />;
   return children;
 }
@@ -84,9 +85,9 @@ function Layout({ children }: { children: React.ReactNode }) {
     if (!shellRef.current) return;
     const ctx = gsap.context(() => {
       gsap.from("[data-shell='nav']", {
-        y: -18,
+        y: -16,
         opacity: 0,
-        duration: 0.7,
+        duration: 0.65,
         ease: "power3.out",
       });
     }, shellRef);
@@ -94,9 +95,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const handleThemeCycle = async () => {
-    if (!preferences || themeUpdating) {
-      return;
-    }
+    if (!preferences || themeUpdating) return;
 
     const modes: Array<"light" | "dark" | "system"> = ["light", "dark", "system"];
     const next = modes[(modes.indexOf(preferences.theme) + 1) % modes.length];
@@ -119,73 +118,45 @@ function Layout({ children }: { children: React.ReactNode }) {
     );
 
   return (
-    <div
-      ref={shellRef}
-       className="relative min-h-screen transition-colors duration-500 bg-background"
-    >
-      <div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-30 dark:opacity-10"
-         style={{
-           backgroundImage: "radial-gradient(circle at 50% 0%, hsl(var(--primary) / 0.15), transparent 70%)"
-         }}
-        aria-hidden
-      />
+    <div ref={shellRef} className="relative min-h-screen transition-colors duration-500 bg-background">
+      <div className="pointer-events-none absolute inset-0 -z-10 brand-noise opacity-[0.16]" aria-hidden />
+
       <header
-        className="sticky top-0 z-20 border-b border-white/40 bg-white/70 backdrop-blur"
+        className="sticky top-0 z-20 border-b border-border/70 bg-background/84 backdrop-blur-xl"
         data-shell="nav"
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-3 text-lg font-semibold tracking-tight"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-              S
-            </span>
-            Sypev
+          <Link to="/dashboard" className="flex items-center gap-3">
+            <img
+              src="/brand/sypev-logo.png"
+              alt="Sypev logo"
+              className="h-9 w-auto rounded-md border border-border/60 bg-white px-1.5 py-1"
+              loading="lazy"
+            />
+            <span className="text-lg font-semibold tracking-tight">Sypev</span>
           </Link>
+
           {user ? (
-            <nav className="flex flex-wrap items-center gap-3 text-sm font-medium">
-              <Link
-                to="/dashboard"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+            <nav className="flex flex-wrap items-center gap-2 text-sm font-medium">
+              <Link to="/dashboard" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 Dashboard
               </Link>
-              <Link
-                to="/study/sat"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+              <Link to="/study/sat" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 SAT Study
               </Link>
-              <Link
-                to="/admissions"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+              <Link to="/admissions" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 Admissions
               </Link>
-              <Link
-                to="/universities"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+              <Link to="/universities" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 Universities
               </Link>
-              <Link
-                to="/tutor"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+              <Link to="/tutor" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 AI Counselor
               </Link>
-              <Link
-                to="/feed"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+              <Link to="/feed" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 Discovery
               </Link>
-              <Link
-                to="/account"
-                className="rounded-full px-3 py-1 hover:bg-primary/10 hover:text-primary"
-              >
+              <Link to="/account" className="rounded-full px-3 py-1.5 hover:bg-muted/80">
                 Account
               </Link>
               <Button
@@ -201,13 +172,9 @@ function Layout({ children }: { children: React.ReactNode }) {
               {user.isAdmin === 1 && (
                 <Link
                   to="/admin"
-                  className="rounded-full px-3 py-1 font-semibold"
-                  style={{
-                    background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                    color: "white",
-                  }}
+                  className="rounded-full border border-border/70 bg-card px-3 py-1.5 font-semibold"
                 >
-                  ⚡ Admin
+                  Admin
                 </Link>
               )}
               <Button variant="outline" size="sm" onClick={logout}>
@@ -216,10 +183,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </nav>
           ) : (
             <nav className="flex items-center gap-3">
-              <Link
-                to="/login"
-                className="text-sm font-medium hover:text-primary"
-              >
+              <Link to="/login" className="text-sm font-medium hover:text-foreground">
                 Log in
               </Link>
               <Button asChild size="sm">
@@ -229,19 +193,36 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </header>
+
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+
+      <footer className="border-t border-border/60 py-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 text-xs text-muted-foreground">
+          <p>© {new Date().getFullYear()} Sypev. Precision SAT & admissions platform.</p>
+          <div className="flex items-center gap-3">
+            <Link to="/dashboard" className="hover:text-foreground">
+              Dashboard
+            </Link>
+            <Link to="/tutor" className="hover:text-foreground">
+              AI Tutor
+            </Link>
+            <Link to="/account" className="hover:text-foreground">
+              Settings
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
 
-import { useGoogleAnalytics } from "./lib/analytics";
-
 export default function App() {
   useGoogleAnalytics();
+
   return (
     <AuthProvider>
+      <SeoManager />
       <Routes>
-        {/* ── Admin routes — standalone, no Layout wrapper ── */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route
           path="/admin"
@@ -252,7 +233,6 @@ export default function App() {
           }
         />
 
-        {/* ── Regular routes — wrapped in Layout ── */}
         <Route
           path="/*"
           element={
@@ -263,6 +243,7 @@ export default function App() {
                 <Route path="/set-username" element={<SetUsername />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+
                 <Route
                   path="/dashboard"
                   element={
@@ -343,14 +324,9 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/"
-                  element={<Navigate to="/dashboard" replace />}
-                />
-                <Route
-                  path="*"
-                  element={<Navigate to="/dashboard" replace />}
-                />
+
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Layout>
           }

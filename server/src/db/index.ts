@@ -107,6 +107,15 @@ async function ensureCoreTables(client: ReturnType<typeof postgres>) {
       updated_at timestamptz NOT NULL DEFAULT now()
     );
 
+    CREATE TABLE IF NOT EXISTS bot_link_tokens (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid NOT NULL,
+      token_hash text NOT NULL,
+      expires_at timestamptz NOT NULL,
+      used_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
     ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS first_name text;
     ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS last_name text;
     ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS gender text;
@@ -126,6 +135,12 @@ async function ensureCoreTables(client: ReturnType<typeof postgres>) {
       ON student_profiles(username);
     CREATE UNIQUE INDEX IF NOT EXISTS universities_name_unique
       ON universities(name);
+    CREATE UNIQUE INDEX IF NOT EXISTS bot_link_tokens_token_hash_uid
+      ON bot_link_tokens(token_hash);
+    CREATE INDEX IF NOT EXISTS bot_link_tokens_user_id_idx
+      ON bot_link_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS bot_link_tokens_expires_at_idx
+      ON bot_link_tokens(expires_at);
   `);
 }
 

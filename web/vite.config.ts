@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     webEnv.VITE_API_URL ||
     rootEnv.VITE_API_URL ||
     serverEnv.VITE_API_URL ||
-    "http://localhost:5000";
+    (mode === "development" ? "http://localhost:5000" : "");
   const viteSupabaseUrl =
     webEnv.VITE_SUPABASE_URL ||
     rootEnv.VITE_SUPABASE_URL ||

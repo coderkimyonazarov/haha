@@ -17,6 +17,7 @@ import admissionsRouter from "./routes/admissions";
 import satRouter from "./routes/sat";
 import aiRouter from "./routes/ai";
 import adminRouter from "./routes/admin";
+import botRouter from "./routes/bot";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -60,7 +61,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-custom-auth", "sypev-admin"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-custom-auth", "sypev-admin", "x-bot-secret"],
   }),
 );
 
@@ -84,6 +85,7 @@ app.use("/api/universities", authOptional, universitiesRouter);
 app.use("/api/admissions", authOptional, admissionsRouter);
 app.use("/api/sat", authOptional, satRouter);
 app.use("/api/ai", authOptional, aiRouter);
+app.use("/api/bot", authOptional, botRouter);
 
 // Admin routes
 app.use("/api/admin", requireAdmin, adminRouter);
