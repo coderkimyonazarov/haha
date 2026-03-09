@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { and, eq } from "drizzle-orm";
+import { createClient } from "@supabase/supabase-js";
 import { AppError } from "../utils/error";
 import { getDb, isDatabaseHealthy } from "../db";
 import { linkedIdentities, auditLogs } from "../db/schema";
@@ -27,6 +28,58 @@ function getDbOrNull() {
     return getDb();
   } catch {
     return null;
+  }
+}
+
+function getBearerToken(req: any): string | null {
+  const authHeader = req.headers?.authorization;
+  if (typeof authHeader !== "string") {
+    return null;
+  }
+
+  if (!authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authHeader.slice("Bearer ".length).trim();
+  return token || null;
+}
+
+async function unlinkIdentityWithUserToken(identity: { identity_id: string; provider: string }, accessToken: string) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new AppError("CONFIG_ERROR", "Supabase auth client is not configured", 500);
+  }
+
+  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+
+  const unlink = (userClient.auth as any).unlinkIdentity;
+  if (typeof unlink !== "function") {
+    throw new AppError("AUTH_SERVICE_UNAVAILABLE", "Identity unlinking is unavailable", 503);
+  }
+
+  const { error } = await unlink(identity);
+  if (error) {
+    const msg = String(error.message || "Provider unlink failed");
+    if (
+      msg.includes("single_identity_not_deletable") ||
+      msg.includes("email_conflict_identity_not_deletable")
+    ) {
+      throw new AppError("INVALID_INPUT", "Cannot unlink the last sign-in provider", 400);
+    }
+    throw new AppError("AUTH_SERVICE_UNAVAILABLE", msg, 503);
   }
 }
 
@@ -260,13 +313,41 @@ router.delete("/providers/:provider", async (req, res, next) => {
           );
       }
     } else {
+      if (provider === "email") {
+        throw new AppError(
+          "INVALID_INPUT",
+          "Primary email provider cannot be unlinked",
+          400,
+        );
+      }
+
       // Unlink native provider via Supabase Admin API
       const {
         data: { user },
       } = await getSupabaseAdmin().auth.admin.getUserById(req.user.id);
       const identity = user?.identities?.find((id) => id.provider === provider);
       if (identity) {
-        await getSupabaseAdmin().auth.admin.deleteIdentity(identity.identity_id);
+        const accessToken = getBearerToken(req);
+        if (accessToken) {
+          await unlinkIdentityWithUserToken(
+            { identity_id: identity.identity_id, provider: identity.provider },
+            accessToken,
+          );
+        } else {
+          const adminDeleteIdentity = (getSupabaseAdmin().auth.admin as any).deleteIdentity;
+          if (typeof adminDeleteIdentity === "function") {
+            const { error } = await adminDeleteIdentity(identity.identity_id);
+            if (error) {
+              throw new AppError("AUTH_SERVICE_UNAVAILABLE", error.message, 503);
+            }
+          } else {
+            throw new AppError(
+              "UNAUTHORIZED",
+              "Re-authentication required to unlink this provider",
+              401,
+            );
+          }
+        }
       }
     }
 

@@ -15,16 +15,50 @@ import { getSupabaseAdmin, getSupabaseConfigStatus } from "../utils/supabase";
 
 const router = Router();
 
+const optionalTrimmedString = (max: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === null || value === undefined) return undefined;
+      if (typeof value !== "string") return value;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : undefined;
+    },
+    z.string().max(max).optional(),
+  );
+
+const optionalInt = (
+  constraint: "positive" | "sat",
+) =>
+  z.preprocess((value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      const normalized = trimmed.replace(/,/g, "");
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : Number.NaN;
+    }
+    return value;
+  }, constraint === "positive"
+    ? z.number().int().positive().optional()
+    : z.number().int().min(200).max(1600).optional());
+
 const addUniversitySchema = z.object({
-  name: z.string().min(1).max(180),
-  state: z.string().min(1).max(120),
-  tuitionUsd: z.number().int().positive().optional(),
-  aidPolicy: z.string().max(120).optional(),
-  satRangeMin: z.number().int().min(200).max(1600).optional(),
-  satRangeMax: z.number().int().min(200).max(1600).optional(),
-  englishReq: z.string().max(120).optional(),
-  applicationDeadline: z.string().max(120).optional(),
-  description: z.string().max(2000).optional(),
+  name: z.preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.string().min(1).max(180),
+  ),
+  state: z.preprocess(
+    (value) => (typeof value === "string" ? value.trim() : value),
+    z.string().min(1).max(120),
+  ),
+  tuitionUsd: optionalInt("positive"),
+  aidPolicy: optionalTrimmedString(120),
+  satRangeMin: optionalInt("sat"),
+  satRangeMax: optionalInt("sat"),
+  englishReq: optionalTrimmedString(120),
+  applicationDeadline: optionalTrimmedString(120),
+  description: optionalTrimmedString(2000),
 });
 
 type AuditLevel = "info" | "warn" | "error";
@@ -81,6 +115,43 @@ function getAuditLevel(action: string, metadata: unknown): AuditLevel {
     return "warn";
   }
   return "info";
+}
+
+function getFixHintForError(metadata: unknown): string {
+  const code =
+    typeof metadata === "object" && metadata && "code" in metadata
+      ? String((metadata as Record<string, unknown>).code ?? "")
+      : "";
+  const message =
+    typeof metadata === "object" && metadata && "message" in metadata
+      ? String((metadata as Record<string, unknown>).message ?? "")
+      : "";
+  const path =
+    typeof metadata === "object" && metadata && "path" in metadata
+      ? String((metadata as Record<string, unknown>).path ?? "")
+      : "";
+
+  if (code === "INVALID_INPUT" && path === "/api/admin/universities") {
+    return "Validate university fields (name/state required, SAT min/max numbers, no empty numeric values).";
+  }
+
+  if (code === "UNAUTHORIZED" && path === "/api/auth/admin-login") {
+    return "Verify ADMIN_USERNAME and ADMIN_PASSWORD or ADMIN_PASSWORD_HASH in deployment environment.";
+  }
+
+  if (message.includes("deleteIdentity")) {
+    return "Supabase SDK mismatch: use auth.unlinkIdentity with user bearer token instead of auth.admin.deleteIdentity.";
+  }
+
+  if (message.toLowerCase().includes("cors")) {
+    return "Check CORS_ORIGIN/APP_URL and allow trusted origins for auth health and Telegram config endpoints.";
+  }
+
+  if (code === "FORBIDDEN" && path.startsWith("/api/admin/")) {
+    return "Admin access required: ensure admin cookie is set or use a bearer token for a user with admin metadata.";
+  }
+
+  return "Check recent deployment/env changes and inspect server route handling for this action.";
 }
 
 function getClientIp(req: any): string {
@@ -347,9 +418,27 @@ router.post("/universities", async (req, res, next) => {
       throw new AppError("DATABASE_UNAVAILABLE", "University service unavailable", 503);
     }
 
-    const parsed = addUniversitySchema.safeParse(req.body ?? {});
+    const rawBody = (req.body ?? {}) as Record<string, unknown>;
+    const normalizedPayload = {
+      name: rawBody.name ?? rawBody.university_name,
+      state: rawBody.state,
+      tuitionUsd: rawBody.tuitionUsd ?? rawBody.tuition_usd,
+      aidPolicy: rawBody.aidPolicy ?? rawBody.aid_policy,
+      satRangeMin: rawBody.satRangeMin ?? rawBody.sat_range_min,
+      satRangeMax: rawBody.satRangeMax ?? rawBody.sat_range_max,
+      englishReq: rawBody.englishReq ?? rawBody.english_req,
+      applicationDeadline: rawBody.applicationDeadline ?? rawBody.application_deadline,
+      description: rawBody.description,
+    };
+
+    const parsed = addUniversitySchema.safeParse(normalizedPayload);
     if (!parsed.success) {
-      throw new AppError("INVALID_INPUT", "Invalid university payload", 400);
+      throw new AppError(
+        "INVALID_INPUT",
+        "Invalid university payload",
+        400,
+        parsed.error.flatten().fieldErrors,
+      );
     }
 
     const input = parsed.data;
@@ -454,8 +543,7 @@ router.get("/errors", async (req, res, next) => {
             : item.action,
         createdAt: item.createdAt,
         details: item.metadata,
-        fixHint:
-          "Check recent deployment/env changes and inspect server route handling for this action.",
+        fixHint: getFixHintForError(item.metadata),
       }));
 
     return res.json({ ok: true, data: errors });

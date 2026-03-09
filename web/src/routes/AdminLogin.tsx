@@ -1,7 +1,8 @@
 import React from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { adminLogin } from "../api";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { gsap } from "gsap";
+import { adminLogin } from "../api";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -18,59 +19,59 @@ export default function AdminLogin() {
     if (!containerRef.current) return;
     const ctx = gsap.context(() => {
       gsap.from(".al-logo", {
-        scale: 0.5,
+        scale: 0.55,
         opacity: 0,
         duration: 0.7,
         ease: "back.out(1.7)",
       });
       gsap.from(".al-title", {
-        y: 24,
+        y: 18,
         opacity: 0,
-        duration: 0.6,
-        delay: 0.15,
+        duration: 0.55,
+        delay: 0.12,
         ease: "power3.out",
       });
       gsap.from(".al-sub", {
-        y: 16,
-        opacity: 0,
-        duration: 0.6,
-        delay: 0.25,
-        ease: "power3.out",
-      });
-      gsap.from(".al-field", {
-        y: 20,
+        y: 14,
         opacity: 0,
         duration: 0.5,
-        stagger: 0.1,
-        delay: 0.35,
+        delay: 0.2,
+        ease: "power2.out",
+      });
+      gsap.from(".al-field", {
+        y: 18,
+        opacity: 0,
+        duration: 0.45,
+        stagger: 0.08,
+        delay: 0.28,
         ease: "power2.out",
       });
       gsap.from(".al-btn", {
         scale: 0.95,
         opacity: 0,
-        duration: 0.5,
-        delay: 0.65,
+        duration: 0.45,
+        delay: 0.55,
         ease: "back.out(1.4)",
       });
 
-      // Animate orbs
       gsap.to(".al-orb-1", {
-        x: 30,
-        y: -20,
-        duration: 6,
+        x: 24,
+        y: -14,
+        duration: 7,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
       });
       gsap.to(".al-orb-2", {
-        x: -20,
-        y: 30,
+        x: -18,
+        y: 20,
         duration: 8,
         repeat: -1,
         yoyo: true,
         ease: "sine.inOut",
       });
     }, containerRef);
+
     return () => ctx.revert();
   }, []);
 
@@ -80,11 +81,9 @@ export default function AdminLogin() {
     setErrorText("");
     try {
       await adminLogin({ username, password });
-      // Navigate to admin panel; AdminRoute will verify the cookie
       navigate("/admin");
     } catch (err: any) {
       setErrorText(err?.message || "Invalid credentials. Please try again.");
-      // Shake effect
       gsap.to(".al-card", {
         x: -8,
         duration: 0.05,
@@ -101,150 +100,30 @@ export default function AdminLogin() {
   };
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        minHeight: "100vh",
-        background: "#050508",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        fontFamily: "'Space Grotesk', sans-serif",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      {/* Background orbs */}
-      <div
-        className="al-orb-1"
-        style={{
-          position: "absolute",
-          top: "15%",
-          left: "10%",
-          width: 420,
-          height: 420,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        className="al-orb-2"
-        style={{
-          position: "absolute",
-          bottom: "10%",
-          right: "8%",
-          width: 320,
-          height: 320,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)",
-          pointerEvents: "none",
-        }}
-      />
+    <div ref={containerRef} className="admin-cosmos relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8">
+      <div className="al-orb-1 pointer-events-none absolute -top-16 left-[7%] h-72 w-72 rounded-full bg-gradient-to-br from-cyan-400/25 to-transparent blur-3xl" />
+      <div className="al-orb-2 pointer-events-none absolute -bottom-12 right-[8%] h-80 w-80 rounded-full bg-gradient-to-br from-fuchsia-400/20 to-transparent blur-3xl" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-indigo-300/15 via-cyan-200/5 to-transparent" />
 
-      {/* Subtle grid overlay */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          backgroundImage:
-            "linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
+      <svg className="pointer-events-none absolute inset-x-0 top-0 h-[110px] w-full" viewBox="0 0 1440 110" preserveAspectRatio="none" aria-hidden>
+        <path d="M0,0 L1440,0 L1440,78 C1280,106 1080,32 900,54 C690,80 560,112 360,82 C250,66 130,48 0,72 Z" fill="rgba(15,23,42,0.9)" />
+      </svg>
 
-      {/* Login card */}
-      <div
-        className="al-card"
-        style={{
-          position: "relative",
-          zIndex: 10,
-          width: "100%",
-          maxWidth: 420,
-          background: "rgba(15, 17, 25, 0.85)",
-          backdropFilter: "blur(32px)",
-          border: "1px solid rgba(99,102,241,0.18)",
-          borderRadius: 24,
-          padding: "44px 40px",
-          boxShadow:
-            "0 0 0 1px rgba(255,255,255,0.04), 0 32px 64px rgba(0,0,0,0.5)",
-        }}
-      >
-        {/* Logo */}
-        <div
-          className="al-logo"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: 32,
-          }}
-        >
-          <div
-            style={{
-              width: 60,
-              height: 60,
-              borderRadius: 16,
-              background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 26,
-              marginBottom: 16,
-              boxShadow: "0 8px 24px rgba(79,70,229,0.4)",
-            }}
-          >
-            ⚡
+      <div className="al-card admin-glass relative z-10 w-full max-w-[470px] rounded-[30px] p-6 sm:p-8">
+        <div className="al-logo mb-6 flex flex-col items-center text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-gradient-to-br from-cyan-300/30 via-indigo-300/30 to-fuchsia-300/30">
+            <ShieldCheck className="h-7 w-7 text-slate-100" />
           </div>
-          <h1
-            className="al-title"
-            style={{
-              fontSize: 26,
-              fontWeight: 700,
-              color: "white",
-              margin: 0,
-              letterSpacing: "-0.5px",
-            }}
-          >
-            Admin Portal
-          </h1>
-          <p
-            className="al-sub"
-            style={{
-              fontSize: 13,
-              color: "rgba(255,255,255,0.35)",
-              marginTop: 6,
-              textAlign: "center",
-            }}
-          >
-            Restricted area · Authorized personnel only
+          <p className="rounded-full border border-rose-300/30 bg-rose-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-100">
+            Restricted
           </p>
+          <h1 className="al-title mt-3 text-3xl font-extrabold tracking-tight text-white">Admin Portal</h1>
+          <p className="al-sub mt-2 text-sm text-slate-300/75">Secure access for internal operations and analytics.</p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: 16 }}
-        >
-          {/* Username */}
-          <div
-            className="al-field"
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
-          >
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "rgba(165,180,252,0.6)",
-              }}
-            >
-              Username
-            </label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="al-field space-y-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300/80">Username</label>
             <input
               type="text"
               value={username}
@@ -252,177 +131,57 @@ export default function AdminLogin() {
               placeholder="admin"
               autoComplete="username"
               required
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(99,102,241,0.2)",
-                borderRadius: 12,
-                color: "white",
-                padding: "13px 16px",
-                fontSize: 14,
-                outline: "none",
-                transition: "border-color 0.2s",
-                width: "100%",
-                boxSizing: "border-box",
-              }}
-              onFocus={(e) =>
-                (e.target.style.borderColor = "rgba(99,102,241,0.6)")
-              }
-              onBlur={(e) =>
-                (e.target.style.borderColor = "rgba(99,102,241,0.2)")
-              }
+              className="admin-input w-full rounded-xl px-3.5 py-2.5 text-sm"
             />
           </div>
 
-          {/* Password */}
-          <div
-            className="al-field"
-            style={{ display: "flex", flexDirection: "column", gap: 6 }}
-          >
-            <label
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "rgba(165,180,252,0.6)",
-              }}
-            >
-              Password
-            </label>
-            <div style={{ position: "relative" }}>
+          <div className="al-field space-y-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300/80">Password</label>
+            <div className="relative">
               <input
                 type={showPass ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
                 required
-                style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(99,102,241,0.2)",
-                  borderRadius: 12,
-                  color: "white",
-                  padding: "13px 44px 13px 16px",
-                  fontSize: 14,
-                  outline: "none",
-                  transition: "border-color 0.2s",
-                  width: "100%",
-                  boxSizing: "border-box",
-                }}
-                onFocus={(e) =>
-                  (e.target.style.borderColor = "rgba(99,102,241,0.6)")
-                }
-                onBlur={(e) =>
-                  (e.target.style.borderColor = "rgba(99,102,241,0.2)")
-                }
+                className="admin-input w-full rounded-xl px-3.5 py-2.5 pr-11 text-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowPass((v) => !v)}
-                style={{
-                  position: "absolute",
-                  right: 13,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "rgba(255,255,255,0.3)",
-                  fontSize: 16,
-                  padding: 0,
-                }}
+                className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-300/80 transition hover:bg-white/10 hover:text-slate-100"
+                aria-label={showPass ? "Hide password" : "Show password"}
               >
-                {showPass ? "🙈" : "👁"}
+                {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
 
-          {/* Error */}
           {errorText && (
-            <div
-              style={{
-                background: "rgba(239,68,68,0.1)",
-                border: "1px solid rgba(239,68,68,0.25)",
-                borderRadius: 10,
-                padding: "10px 14px",
-                fontSize: 13,
-                color: "#f87171",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span>⚠️</span> {errorText}
+            <div className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-100">
+              {errorText}
             </div>
           )}
 
-          {/* Submit */}
           <button
-            className="al-btn"
+            className="al-btn mt-2 w-full rounded-xl border border-cyan-300/45 bg-gradient-to-r from-cyan-400/25 via-indigo-400/25 to-fuchsia-300/25 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             type="submit"
             disabled={submitting}
-            style={{
-              marginTop: 8,
-              width: "100%",
-              padding: "14px",
-              borderRadius: 14,
-              background: submitting
-                ? "rgba(79,70,229,0.4)"
-                : "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-              color: "white",
-              fontWeight: 700,
-              fontSize: 15,
-              letterSpacing: "0.02em",
-              border: "none",
-              cursor: submitting ? "not-allowed" : "pointer",
-              transition: "all 0.2s",
-              boxShadow: submitting
-                ? "none"
-                : "0 8px 20px rgba(79,70,229,0.35)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-            onMouseEnter={(e) => {
-              if (!submitting)
-                (e.target as HTMLButtonElement).style.transform =
-                  "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.transform = "";
-            }}
           >
             {submitting ? (
-              <>
-                <div className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                Authenticating…
-              </>
+              <span className="inline-flex items-center gap-2">
+                <span className="h-4 w-4 rounded-full border-2 border-white/35 border-t-white animate-spin" />
+                Authenticating...
+              </span>
             ) : (
-              "Authorize Access →"
+              "Authorize Access"
             )}
           </button>
         </form>
 
-        {/* Footer link */}
-        <div style={{ textAlign: "center", marginTop: 28 }}>
-          <Link
-            to="/login"
-            style={{
-              fontSize: 12,
-              color: "rgba(255,255,255,0.2)",
-              textDecoration: "none",
-              transition: "color 0.2s",
-            }}
-            onMouseEnter={(e) =>
-              ((e.target as HTMLAnchorElement).style.color =
-                "rgba(165,180,252,0.6)")
-            }
-            onMouseLeave={(e) =>
-              ((e.target as HTMLAnchorElement).style.color =
-                "rgba(255,255,255,0.2)")
-            }
-          >
-            ← Return to User Portal
+        <div className="mt-6 text-center">
+          <Link to="/login" className="text-xs font-medium text-slate-300/70 transition hover:text-cyan-100">
+            Back to user portal
           </Link>
         </div>
       </div>

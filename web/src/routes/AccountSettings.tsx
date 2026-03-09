@@ -498,7 +498,7 @@ export default function AccountSettings() {
                             ) : null}
                             Link Google
                           </Button>
-                        ) : linked ? (
+                        ) : linked && provider !== "email" ? (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -511,6 +511,8 @@ export default function AccountSettings() {
                             ) : null}
                             Unlink
                           </Button>
+                        ) : linked && provider === "email" ? (
+                          <p className="text-xs text-muted-foreground">Primary sign-in provider</p>
                         ) : (
                           <p className="text-xs text-muted-foreground">Not linked</p>
                         )}

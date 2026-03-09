@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { and, eq } from "drizzle-orm";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
+import argon2 from "argon2";
 
 import { getDb, getDbConfigStatus, isDatabaseHealthy } from "../db";
 import { linkedIdentities, studentProfiles, userPreferences } from "../db/schema";
@@ -110,6 +111,35 @@ function mapPersonaToVibe(persona: Persona): Vibe {
     return "playful";
   }
   return "minimal";
+}
+
+function hasAdminPrivileges(user: {
+  user_metadata?: Record<string, unknown> | null;
+  app_metadata?: Record<string, unknown> | null;
+} | null | undefined): boolean {
+  const userMetadata = (user?.user_metadata ?? {}) as Record<string, unknown>;
+  const appMetadata = (user?.app_metadata ?? {}) as Record<string, unknown>;
+
+  return (
+    userMetadata.isAdmin === true ||
+    userMetadata.is_admin === true ||
+    userMetadata.role === "admin" ||
+    appMetadata.role === "admin"
+  );
+}
+
+async function verifyAdminPassword(password: string): Promise<boolean> {
+  const hashedPassword = process.env.ADMIN_PASSWORD_HASH?.trim();
+  if (hashedPassword) {
+    try {
+      return await argon2.verify(hashedPassword, password);
+    } catch {
+      return false;
+    }
+  }
+
+  const plainPassword = process.env.ADMIN_PASSWORD ?? "";
+  return Boolean(plainPassword) && password === plainPassword;
 }
 
 function parseInterests(raw: unknown): string[] {
@@ -1706,7 +1736,7 @@ router.get("/me", async (req, res, next) => {
             [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim() ||
             (req.user.user_metadata?.name as string | undefined) ||
             "User",
-          isAdmin: 0,
+          isAdmin: hasAdminPrivileges(adminUser ?? req.user) ? 1 : 0,
           isVerified: req.user.email_confirmed_at ? 1 : 0,
           needsUsername: !effectiveUsername,
           needsOnboarding: !onboardingDone,
@@ -1781,12 +1811,30 @@ router.post("/logout", async (_req, res) => {
 
 router.post("/admin-login", authLimiter, async (req, res, next) => {
   try {
-    const { username, password } = req.body;
+    const credentials = parseWithSchema(
+      z.object({
+        username: z.string().min(1).max(120),
+        password: z.string().min(1).max(1024),
+      }),
+      req.body,
+    );
+
+    const username = credentials.username.trim();
+    const password = credentials.password;
+    const configuredUsername = (process.env.ADMIN_USERNAME || "").trim();
+    const hasConfiguredPassword = Boolean(
+      process.env.ADMIN_PASSWORD_HASH?.trim() || process.env.ADMIN_PASSWORD,
+    );
+
+    if (!configuredUsername || !hasConfiguredPassword) {
+      throw new AppError("CONFIG_ERROR", "Admin login is not configured", 503);
+    }
+
+    const passwordMatches = await verifyAdminPassword(password);
     const isProduction = process.env.NODE_ENV === "production";
     if (
-      username === process.env.ADMIN_USERNAME &&
-      password === process.env.ADMIN_PASSWORD &&
-      username !== undefined
+      username === configuredUsername &&
+      passwordMatches
     ) {
       res.cookie("sypev_admin", "true", {
         httpOnly: true,
@@ -1819,7 +1867,7 @@ router.post("/admin-logout", async (_req, res, next) => {
 router.get("/admin-me", async (req, res, next) => {
   try {
     const adminCookie = req.cookies?.sypev_admin;
-    if (adminCookie) {
+    if (adminCookie === "true" || hasAdminPrivileges(req.user)) {
       return res.json({ ok: true, data: { admin: true } });
     }
     return res.json({ ok: true, data: { admin: false } });

@@ -1,6 +1,21 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  Activity,
+  AlertOctagon,
+  Building2,
+  CircleUserRound,
+  Eye,
+  GraduationCap,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Search,
+  Shield,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import {
   adminAddUniversity,
   adminDeleteUniversity,
   adminDeleteUser,
@@ -23,7 +38,7 @@ import {
 } from "../api";
 
 function fmtDate(ts?: number | null) {
-  if (!ts) return "—";
+  if (!ts) return "-";
   return new Date(ts).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -32,7 +47,7 @@ function fmtDate(ts?: number | null) {
 }
 
 function fmtDateTime(ts?: number | null) {
-  if (!ts) return "—";
+  if (!ts) return "-";
   return new Date(ts).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -50,36 +65,53 @@ function safeJson(value: unknown) {
   }
 }
 
+type Tab = "overview" | "users" | "universities" | "observability";
+
 function StatCard({
   label,
   value,
   icon,
-  color,
+  accent,
 }: {
   label: string;
   value: number | string;
-  icon: string;
-  color: string;
+  icon: React.ReactNode;
+  accent: "cyan" | "indigo" | "rose";
 }) {
+  const accentMap: Record<"cyan" | "indigo" | "rose", string> = {
+    cyan: "from-cyan-300/25 to-sky-400/5 text-cyan-100",
+    indigo: "from-indigo-300/30 to-violet-400/5 text-indigo-100",
+    rose: "from-rose-300/30 to-fuchsia-400/5 text-rose-100",
+  };
+
   return (
-    <div
-      className="rounded-2xl border p-5 flex items-center gap-4"
-      style={{
-        background: "rgba(255,255,255,0.04)",
-        borderColor: "rgba(255,255,255,0.1)",
-      }}
-    >
-      <div
-        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
-        style={{ background: `${color}22`, color }}
-      >
-        {icon}
-      </div>
-      <div>
-        <div className="text-2xl font-bold text-white">{value}</div>
-        <div className="text-xs uppercase tracking-wide text-white/50">{label}</div>
+    <div className="admin-glass rounded-3xl p-5 sm:p-6">
+      <div className="flex items-center gap-4">
+        <div className={`h-12 w-12 rounded-xl border border-white/15 bg-gradient-to-br ${accentMap[accent]} flex items-center justify-center`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-2xl font-extrabold tracking-tight text-slate-100">{value}</div>
+          <div className="text-xs uppercase tracking-[0.14em] text-slate-300/75">{label}</div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function AuroraWave() {
+  return (
+    <svg className="admin-wave" viewBox="0 0 1440 96" preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <linearGradient id="adminWave" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#7dd3fc" stopOpacity="0.12" />
+          <stop offset="42%" stopColor="#818cf8" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="#f9a8d4" stopOpacity="0.16" />
+        </linearGradient>
+      </defs>
+      <path d="M0,48 C150,76 330,8 520,34 C710,60 860,95 1080,58 C1240,31 1330,18 1440,42 L1440,96 L0,96 Z" fill="url(#adminWave)" />
+      <path d="M0,56 C250,102 490,22 760,48 C970,68 1200,90 1440,52" fill="none" stroke="rgba(226,232,240,0.28)" strokeWidth="2" />
+    </svg>
   );
 }
 
@@ -88,7 +120,7 @@ function AddUniversityModal({
   onAdded,
 }: {
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: () => Promise<void> | void;
 }) {
   const [form, setForm] = React.useState({
     name: "",
@@ -104,6 +136,17 @@ function AddUniversityModal({
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState("");
 
+  const parseOptionalInteger = (raw: string) => {
+    const normalized = raw.trim().replace(/,/g, "");
+    if (!normalized) return undefined;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return Number.NaN;
+    return Math.trunc(parsed);
+  };
+
+  const inputClass =
+    "admin-input rounded-xl px-3.5 py-2.5 text-sm transition-colors";
+
   const inp =
     (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -112,28 +155,53 @@ function AddUniversityModal({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.state.trim()) {
-      setErr("Name and state are required");
+      setErr("Name va state majburiy");
       return;
     }
 
     setLoading(true);
     setErr("");
     try {
+      const tuitionUsd = parseOptionalInteger(form.tuitionUsd);
+      const satRangeMin = parseOptionalInteger(form.satRangeMin);
+      const satRangeMax = parseOptionalInteger(form.satRangeMax);
+
+      if ([tuitionUsd, satRangeMin, satRangeMax].some((value) => Number.isNaN(value))) {
+        setErr("Raqamli maydonlarga faqat to'g'ri son kiriting");
+        return;
+      }
+
+      if (
+        typeof satRangeMin === "number" &&
+        typeof satRangeMax === "number" &&
+        satRangeMin > satRangeMax
+      ) {
+        setErr("SAT minimum SAT maximumdan katta bo'lishi mumkin emas");
+        return;
+      }
+
       await adminAddUniversity({
         name: form.name.trim(),
         state: form.state.trim(),
-        tuitionUsd: form.tuitionUsd ? Number(form.tuitionUsd) : undefined,
+        tuitionUsd,
         aidPolicy: form.aidPolicy || undefined,
-        satRangeMin: form.satRangeMin ? Number(form.satRangeMin) : undefined,
-        satRangeMax: form.satRangeMax ? Number(form.satRangeMax) : undefined,
+        satRangeMin,
+        satRangeMax,
         englishReq: form.englishReq || undefined,
         applicationDeadline: form.applicationDeadline || undefined,
         description: form.description || undefined,
       });
-      onAdded();
+      await onAdded();
       onClose();
     } catch (error: any) {
-      setErr(error?.message || "Failed to add university");
+      const fieldErrors =
+        error?.details && typeof error.details === "object"
+          ? Object.values(error.details as Record<string, unknown>)
+              .flat()
+              .map((item) => String(item))
+              .filter(Boolean)
+          : [];
+      setErr(fieldErrors[0] || error?.message || "Universitet qo'shilmadi");
     } finally {
       setLoading(false);
     }
@@ -141,44 +209,78 @@ function AddUniversityModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 px-4 backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0f1117] p-6"
+        className="admin-glass w-full max-w-3xl rounded-3xl p-5 sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-semibold text-white mb-4">Add University</h2>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-300/70">University</p>
+            <h2 className="mt-1 text-2xl font-bold text-white">Add New University</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200"
+          >
+            Close
+          </button>
+        </div>
+
         <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Name *" value={form.name} onChange={inp("name")} />
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="State *" value={form.state} onChange={inp("state")} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input className={inputClass} placeholder="University name *" value={form.name} onChange={inp("name")} autoFocus />
+            <input className={inputClass} placeholder="State (e.g. CA) *" value={form.state} onChange={inp("state")} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Tuition USD" value={form.tuitionUsd} onChange={inp("tuitionUsd")} />
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Aid Policy" value={form.aidPolicy} onChange={inp("aidPolicy")} />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input type="number" min={1} className={inputClass} placeholder="Tuition USD" value={form.tuitionUsd} onChange={inp("tuitionUsd")} />
+            <input className={inputClass} placeholder="Aid policy" value={form.aidPolicy} onChange={inp("aidPolicy")} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="SAT Min" value={form.satRangeMin} onChange={inp("satRangeMin")} />
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="SAT Max" value={form.satRangeMax} onChange={inp("satRangeMax")} />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input type="number" min={200} max={1600} className={inputClass} placeholder="SAT min" value={form.satRangeMin} onChange={inp("satRangeMin")} />
+            <input type="number" min={200} max={1600} className={inputClass} placeholder="SAT max" value={form.satRangeMax} onChange={inp("satRangeMax")} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="English Requirement" value={form.englishReq} onChange={inp("englishReq")} />
-            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Application Deadline" value={form.applicationDeadline} onChange={inp("applicationDeadline")} />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input className={inputClass} placeholder="English requirement" value={form.englishReq} onChange={inp("englishReq")} />
+            <input className={inputClass} placeholder="Application deadline" value={form.applicationDeadline} onChange={inp("applicationDeadline")} />
           </div>
-          <textarea className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white min-h-[90px]" placeholder="Description" value={form.description} onChange={inp("description")} />
-          {err && <p className="text-sm text-red-400">{err}</p>}
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 py-2 text-sm text-white/80">Cancel</button>
-            <button type="submit" disabled={loading} className="flex-1 rounded-lg bg-indigo-500 py-2 text-sm font-semibold text-white disabled:opacity-60">{loading ? "Adding..." : "Add University"}</button>
+
+          <textarea
+            className={`${inputClass} min-h-[100px] w-full`}
+            placeholder="Description"
+            value={form.description}
+            onChange={inp("description")}
+          />
+
+          {err && <p className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{err}</p>}
+
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-xl border border-cyan-300/40 bg-gradient-to-r from-cyan-400/25 via-indigo-400/25 to-fuchsia-300/25 px-4 py-2.5 text-sm font-semibold text-slate-100 disabled:opacity-60"
+            >
+              {loading ? "Adding..." : "Add University"}
+            </button>
           </div>
         </form>
       </div>
     </div>
   );
 }
-
-type Tab = "overview" | "users" | "universities" | "observability";
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -294,103 +396,161 @@ export default function AdminPanel() {
     return u.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  const tabButton = (value: Tab, title: string) => (
-    <button
-      key={value}
-      onClick={() => {
-        setTab(value);
-        setSearch("");
-      }}
-      className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
-        tab === value ? "bg-indigo-500 text-white" : "bg-transparent text-white/60"
-      }`}
-    >
-      {title}
-    </button>
-  );
+  const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode }> = [
+    { key: "overview", label: "Overview", icon: <Sparkles className="h-4 w-4" /> },
+    { key: "users", label: "Users", icon: <Users className="h-4 w-4" /> },
+    { key: "universities", label: "Universities", icon: <GraduationCap className="h-4 w-4" /> },
+    { key: "observability", label: "Observability", icon: <Eye className="h-4 w-4" /> },
+  ];
+
+  const actionBtn =
+    "rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 transition hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-cyan-200/10";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0c14] via-[#0d1120] to-[#0a0c14] text-white">
+    <div className="admin-cosmos min-h-screen text-slate-100">
       {showAddUni && <AddUniversityModal onClose={() => setShowAddUni(false)} onAdded={loadUniversities} />}
 
-      <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0c14]/85 backdrop-blur px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-indigo-500 flex items-center justify-center text-sm font-bold">⚡</div>
-          <p className="text-lg font-semibold">Sypev Admin</p>
-          <span className="rounded-full bg-red-500/15 text-red-300 px-2 py-0.5 text-xs font-semibold">RESTRICTED</span>
-        </div>
-        <button onClick={handleAdminLogout} className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300">
-          Sign Out
-        </button>
-      </div>
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/65 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl border border-white/20 bg-gradient-to-br from-cyan-300/30 via-indigo-300/30 to-fuchsia-300/30 flex items-center justify-center">
+              <Shield className="h-5 w-5 text-slate-100" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-slate-100">Sypev Admin</p>
+              <p className="text-xs text-slate-300/75">Control Center</p>
+            </div>
+            <span className="hidden rounded-full border border-rose-300/35 bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-rose-200 sm:inline-flex">
+              RESTRICTED
+            </span>
+          </div>
 
-      <div className="mx-auto max-w-7xl px-6 py-6">
-        <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/5 p-1.5 w-fit">
-          {tabButton("overview", "Overview")}
-          {tabButton("users", "Users")}
-          {tabButton("universities", "Universities")}
-          {tabButton("observability", "Observability")}
+          <button onClick={handleAdminLogout} className={actionBtn}>
+            <span className="inline-flex items-center gap-2">
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </span>
+          </button>
+        </div>
+      </header>
+
+      <section className="relative overflow-hidden border-b border-white/10">
+        <div className="mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
+          <p className="text-xs uppercase tracking-[0.24em] text-slate-300/70">Mission Control</p>
+          <h1 className="mt-3 max-w-3xl text-3xl font-extrabold leading-tight sm:text-5xl">
+            <span className="admin-glow-text">Elegant</span> admin workflows for users, universities, and live signals.
+          </h1>
+          <p className="mt-4 max-w-2xl text-sm text-slate-300/80 sm:text-base">
+            Premium observability layout with quick decision surfaces, real-time cards, and cleaner operation actions.
+          </p>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="admin-glass rounded-2xl px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-300/75">Users</p>
+              <p className="mt-1 text-2xl font-bold text-white">{stats?.users ?? 0}</p>
+            </div>
+            <div className="admin-glass rounded-2xl px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-300/75">Universities</p>
+              <p className="mt-1 text-2xl font-bold text-white">{stats?.universities ?? 0}</p>
+            </div>
+            <div className="admin-glass rounded-2xl px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.15em] text-slate-300/75">Recent Errors</p>
+              <p className="mt-1 text-2xl font-bold text-white">{stats?.recentErrors ?? 0}</p>
+            </div>
+          </div>
+        </div>
+        <AuroraWave />
+      </section>
+
+      <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="admin-glass rounded-2xl p-2">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => {
+                  setTab(item.key);
+                  setSearch("");
+                }}
+                data-active={tab === item.key}
+                className="admin-chip inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium"
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {loading && <p className="text-sm text-white/60 mb-4">Loading...</p>}
+        {loading && (
+          <div className="admin-glass rounded-2xl p-3">
+            <p className="inline-flex items-center gap-2 text-sm text-slate-200">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Loading latest admin data...
+            </p>
+          </div>
+        )}
 
         {tab === "overview" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard label="Total Users" value={stats?.users ?? 0} icon="👥" color="#6366f1" />
-              <StatCard label="Universities" value={stats?.universities ?? 0} icon="🎓" color="#8b5cf6" />
-              <StatCard label="Recent Errors" value={stats?.recentErrors ?? 0} icon="🚨" color="#ef4444" />
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <StatCard label="Total Users" value={stats?.users ?? 0} icon={<Users className="h-5 w-5" />} accent="cyan" />
+              <StatCard label="Universities" value={stats?.universities ?? 0} icon={<Building2 className="h-5 w-5" />} accent="indigo" />
+              <StatCard label="Recent Errors" value={stats?.recentErrors ?? 0} icon={<AlertOctagon className="h-5 w-5" />} accent="rose" />
             </div>
 
-            <div className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-semibold text-lg">AI Product Insight</h2>
-                <button
-                  onClick={() => loadOverview().catch(() => {})}
-                  className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs"
-                >
-                  Refresh
+            <div className="admin-glass rounded-3xl p-5 sm:p-6">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-100">
+                  <Sparkles className="h-5 w-5 text-indigo-200" /> AI Product Insight
+                </h2>
+                <button onClick={() => loadOverview().catch(() => {})} className={actionBtn}>
+                  <span className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4" />Refresh</span>
                 </button>
               </div>
-              <p className="text-xs text-white/60 mb-2">
+              <p className="mb-3 text-xs text-slate-300/75">
                 Generated: {fmtDateTime(insight?.generatedAt)} | Mode: {insight?.mode || "N/A"}
               </p>
-              <pre className="whitespace-pre-wrap text-sm leading-6 text-white/90 bg-black/20 rounded-xl p-4 border border-white/10">
+              <pre className="max-h-[360px] overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm leading-6 text-slate-100">
                 {insight?.summary || "No insight yet."}
               </pre>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <h3 className="font-semibold mb-3">Latest Events</h3>
-                <div className="space-y-2 max-h-[360px] overflow-auto">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="admin-glass rounded-3xl p-5">
+                <h3 className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-white">
+                  <Activity className="h-4 w-4 text-cyan-200" /> Latest Events
+                </h3>
+                <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
                   {events.slice(0, 12).map((event) => (
-                    <div key={event.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{event.type}</span>
-                        <span className="text-xs text-white/50">{fmtDateTime(event.createdAt)}</span>
+                    <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium text-slate-100">{event.type}</span>
+                        <span className="text-xs text-slate-300/70">{fmtDateTime(event.createdAt)}</span>
                       </div>
-                      <p className="text-xs text-white/60 mt-1">Level: {event.level} | User: {event.userId || "system"}</p>
+                      <p className="mt-1 text-xs text-slate-300/75">Level: {event.level} | User: {event.userId || "system"}</p>
                     </div>
                   ))}
-                  {events.length === 0 && <p className="text-sm text-white/50">No events</p>}
+                  {events.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No events</p>}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <h3 className="font-semibold mb-3">Latest Errors & Fix Hints</h3>
-                <div className="space-y-2 max-h-[360px] overflow-auto">
+              <div className="admin-glass rounded-3xl p-5">
+                <h3 className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-white">
+                  <AlertOctagon className="h-4 w-4 text-rose-200" /> Latest Errors & Fix Hints
+                </h3>
+                <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
                   {errors.slice(0, 12).map((error) => (
-                    <div key={error.id} className="rounded-lg border border-red-300/20 bg-red-500/10 p-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-red-200">{error.code}</span>
-                        <span className="text-xs text-red-200/70">{fmtDateTime(error.createdAt)}</span>
+                    <div key={error.id} className="rounded-xl border border-rose-300/25 bg-rose-500/10 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-rose-100">{error.code}</span>
+                        <span className="text-xs text-rose-100/70">{fmtDateTime(error.createdAt)}</span>
                       </div>
-                      <p className="text-sm text-red-100 mt-1">{error.message}</p>
-                      <p className="text-xs text-red-100/80 mt-2">Fix: {error.fixHint}</p>
+                      <p className="mt-1 text-sm text-rose-100">{error.message}</p>
+                      <p className="mt-2 text-xs text-rose-100/90">Fix: {error.fixHint}</p>
                     </div>
                   ))}
-                  {errors.length === 0 && <p className="text-sm text-white/50">No errors</p>}
+                  {errors.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No errors</p>}
                 </div>
               </div>
             </div>
@@ -398,45 +558,54 @@ export default function AdminPanel() {
         )}
 
         {tab === "users" && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Users ({filteredUsers.length})</h2>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search user/email..."
-                className="rounded-lg bg-white/10 border border-white/15 px-3 py-2 text-sm w-72"
-              />
+          <div className="admin-glass rounded-3xl p-4 sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="inline-flex items-center gap-2 text-xl font-semibold text-white">
+                <CircleUserRound className="h-5 w-5 text-cyan-200" /> Users ({filteredUsers.length})
+              </h2>
+              <label className="relative w-full sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search user or email..."
+                  className="admin-input w-full rounded-xl py-2 pl-9 pr-3 text-sm"
+                />
+              </label>
             </div>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
+
+            <div className="overflow-auto rounded-2xl border border-white/10">
+              <table className="admin-table w-full min-w-[860px] text-sm">
                 <thead>
-                  <tr className="text-white/60 border-b border-white/10">
-                    <th className="text-left py-2">Name</th>
-                    <th className="text-left py-2">Email</th>
-                    <th className="text-left py-2">Providers</th>
-                    <th className="text-left py-2">Role</th>
-                    <th className="text-left py-2">Joined</th>
-                    <th className="text-left py-2">Last Sign-In</th>
-                    <th className="text-left py-2">Actions</th>
+                  <tr>
+                    <th className="text-left">Name</th>
+                    <th className="text-left">Email</th>
+                    <th className="text-left">Providers</th>
+                    <th className="text-left">Role</th>
+                    <th className="text-left">Joined</th>
+                    <th className="text-left">Last Sign-In</th>
+                    <th className="text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((u) => (
-                    <tr key={u.id} className="border-b border-white/5">
-                      <td className="py-2">{u.name}</td>
-                      <td className="py-2 text-white/70">{u.email || "—"}</td>
-                      <td className="py-2 text-white/70">{(u.providers || []).join(", ") || "—"}</td>
-                      <td className="py-2">{u.isAdmin ? "Admin" : "User"}</td>
-                      <td className="py-2 text-white/70">{fmtDate(u.createdAt)}</td>
-                      <td className="py-2 text-white/70">{fmtDateTime(u.lastSignInAt)}</td>
-                      <td className="py-2">
-                        <div className="flex gap-2">
-                          <button onClick={() => toggleAdmin(u.id)} className="rounded-md px-2 py-1 text-xs bg-indigo-500/20 border border-indigo-300/30">
+                    <tr key={u.id}>
+                      <td>{u.name}</td>
+                      <td className="text-slate-300">{u.email || "-"}</td>
+                      <td className="text-slate-300">{(u.providers || []).join(", ") || "-"}</td>
+                      <td>{u.isAdmin ? "Admin" : "User"}</td>
+                      <td className="text-slate-300">{fmtDate(u.createdAt)}</td>
+                      <td className="text-slate-300">{fmtDateTime(u.lastSignInAt)}</td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => toggleAdmin(u.id)} className={actionBtn}>
                             {u.isAdmin ? "Revoke Admin" : "Make Admin"}
                           </button>
                           {!u.isAdmin && (
-                            <button onClick={() => deleteUser(u.id)} className="rounded-md px-2 py-1 text-xs bg-red-500/20 border border-red-300/30">
+                            <button
+                              onClick={() => deleteUser(u.id)}
+                              className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-100"
+                            >
                               Delete
                             </button>
                           )}
@@ -446,49 +615,64 @@ export default function AdminPanel() {
                   ))}
                 </tbody>
               </table>
-              {filteredUsers.length === 0 && <p className="text-sm text-white/50 py-8 text-center">No users</p>}
             </div>
+            {filteredUsers.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No users</p>}
           </div>
         )}
 
         {tab === "universities" && (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Universities ({filteredUniversities.length})</h2>
-              <div className="flex gap-2">
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search university..."
-                  className="rounded-lg bg-white/10 border border-white/15 px-3 py-2 text-sm w-72"
-                />
-                <button onClick={() => setShowAddUni(true)} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold">
-                  Add University
+          <div className="admin-glass rounded-3xl p-4 sm:p-5">
+            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <h2 className="inline-flex items-center gap-2 text-xl font-semibold text-white">
+                <GraduationCap className="h-5 w-5 text-indigo-200" /> Universities ({filteredUniversities.length})
+              </h2>
+
+              <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+                <label className="relative w-full sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search university..."
+                    className="admin-input w-full rounded-xl py-2 pl-9 pr-3 text-sm"
+                  />
+                </label>
+                <button
+                  onClick={() => setShowAddUni(true)}
+                  className="rounded-xl border border-indigo-300/40 bg-gradient-to-r from-cyan-400/20 via-indigo-400/20 to-fuchsia-300/20 px-3 py-2 text-sm font-semibold text-slate-100"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Plus className="h-4 w-4" /> Add University
+                  </span>
                 </button>
               </div>
             </div>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
+
+            <div className="overflow-auto rounded-2xl border border-white/10">
+              <table className="admin-table w-full min-w-[860px] text-sm">
                 <thead>
-                  <tr className="text-white/60 border-b border-white/10">
-                    <th className="text-left py-2">Name</th>
-                    <th className="text-left py-2">State</th>
-                    <th className="text-left py-2">Tuition</th>
-                    <th className="text-left py-2">SAT</th>
-                    <th className="text-left py-2">Aid</th>
-                    <th className="text-left py-2">Actions</th>
+                  <tr>
+                    <th className="text-left">Name</th>
+                    <th className="text-left">State</th>
+                    <th className="text-left">Tuition</th>
+                    <th className="text-left">SAT</th>
+                    <th className="text-left">Aid</th>
+                    <th className="text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUniversities.map((u) => (
-                    <tr key={u.id} className="border-b border-white/5">
-                      <td className="py-2">{u.name}</td>
-                      <td className="py-2 text-white/70">{u.state}</td>
-                      <td className="py-2 text-white/70">{u.tuitionUsd ? `$${u.tuitionUsd.toLocaleString()}` : "—"}</td>
-                      <td className="py-2 text-white/70">{u.satRangeMin && u.satRangeMax ? `${u.satRangeMin}–${u.satRangeMax}` : "—"}</td>
-                      <td className="py-2 text-white/70">{u.aidPolicy || "—"}</td>
-                      <td className="py-2">
-                        <button onClick={() => deleteUniversity(u.id)} className="rounded-md px-2 py-1 text-xs bg-red-500/20 border border-red-300/30">
+                    <tr key={u.id}>
+                      <td>{u.name}</td>
+                      <td className="text-slate-300">{u.state}</td>
+                      <td className="text-slate-300">{u.tuitionUsd ? `$${u.tuitionUsd.toLocaleString()}` : "-"}</td>
+                      <td className="text-slate-300">{u.satRangeMin && u.satRangeMax ? `${u.satRangeMin}-${u.satRangeMax}` : "-"}</td>
+                      <td className="text-slate-300">{u.aidPolicy || "-"}</td>
+                      <td>
+                        <button
+                          onClick={() => deleteUniversity(u.id)}
+                          className="rounded-xl border border-rose-300/35 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-100"
+                        >
                           Delete
                         </button>
                       </td>
@@ -496,74 +680,81 @@ export default function AdminPanel() {
                   ))}
                 </tbody>
               </table>
-              {filteredUniversities.length === 0 && <p className="text-sm text-white/50 py-8 text-center">No universities</p>}
             </div>
+
+            {filteredUniversities.length === 0 && <p className="py-8 text-center text-sm text-slate-400">No universities</p>}
           </div>
         )}
 
         {tab === "observability" && (
           <div className="space-y-4">
             <div className="flex justify-end">
-              <button onClick={() => loadObservability().catch(() => {})} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">
-                Refresh Logs
+              <button onClick={() => loadObservability().catch(() => {})} className={actionBtn}>
+                <span className="inline-flex items-center gap-2"><RefreshCw className="h-4 w-4" />Refresh Logs</span>
               </button>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="font-semibold mb-3">Errors ({errors.length})</h3>
-              <div className="space-y-2 max-h-[320px] overflow-auto">
+            <div className="admin-glass rounded-3xl p-5">
+              <h3 className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-white">
+                <AlertOctagon className="h-4 w-4 text-rose-200" /> Errors ({errors.length})
+              </h3>
+              <div className="space-y-2 max-h-[320px] overflow-auto pr-1">
                 {errors.map((error) => (
-                  <div key={error.id} className="rounded-lg border border-red-300/20 bg-red-500/10 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-red-200">{error.code}</span>
-                      <span className="text-xs text-red-200/70">{fmtDateTime(error.createdAt)}</span>
+                  <div key={error.id} className="rounded-xl border border-rose-300/25 bg-rose-500/10 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-rose-100">{error.code}</span>
+                      <span className="text-xs text-rose-100/70">{fmtDateTime(error.createdAt)}</span>
                     </div>
-                    <p className="text-sm text-red-100 mt-1">{error.message}</p>
-                    <p className="text-xs text-red-100/80 mt-2">Fix: {error.fixHint}</p>
+                    <p className="mt-1 text-sm text-rose-100">{error.message}</p>
+                    <p className="mt-2 text-xs text-rose-100/80">Fix: {error.fixHint}</p>
                   </div>
                 ))}
-                {errors.length === 0 && <p className="text-sm text-white/50">No errors</p>}
+                {errors.length === 0 && <p className="text-sm text-slate-400">No errors</p>}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="font-semibold mb-3">Events ({events.length})</h3>
-              <div className="space-y-2 max-h-[320px] overflow-auto">
+            <div className="admin-glass rounded-3xl p-5">
+              <h3 className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-white">
+                <Activity className="h-4 w-4 text-cyan-200" /> Events ({events.length})
+              </h3>
+              <div className="space-y-2 max-h-[320px] overflow-auto pr-1">
                 {events.map((event) => (
-                  <div key={event.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">{event.type}</span>
-                      <span className="text-xs text-white/60">{fmtDateTime(event.createdAt)}</span>
+                  <div key={event.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-slate-100">{event.type}</span>
+                      <span className="text-xs text-slate-300/70">{fmtDateTime(event.createdAt)}</span>
                     </div>
-                    <p className="text-xs text-white/60 mt-1">Level: {event.level} | User: {event.userId || "system"}</p>
-                    <pre className="text-xs text-white/70 mt-2 whitespace-pre-wrap break-all">{safeJson(event.details)}</pre>
+                    <p className="mt-1 text-xs text-slate-300/75">Level: {event.level} | User: {event.userId || "system"}</p>
+                    <pre className="mt-2 whitespace-pre-wrap break-all text-xs text-slate-300/80">{safeJson(event.details)}</pre>
                   </div>
                 ))}
-                {events.length === 0 && <p className="text-sm text-white/50">No events</p>}
+                {events.length === 0 && <p className="text-sm text-slate-400">No events</p>}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <h3 className="font-semibold mb-3">Audit Logs ({auditLogs.length})</h3>
-              <div className="space-y-2 max-h-[340px] overflow-auto">
+            <div className="admin-glass rounded-3xl p-5">
+              <h3 className="mb-3 inline-flex items-center gap-2 text-base font-semibold text-white">
+                <Eye className="h-4 w-4 text-indigo-200" /> Audit Logs ({auditLogs.length})
+              </h3>
+              <div className="space-y-2 max-h-[340px] overflow-auto pr-1">
                 {auditLogs.map((log) => (
-                  <div key={log.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">{log.action}</span>
-                      <span className="text-xs text-white/60">{fmtDateTime(log.createdAt)}</span>
+                  <div key={log.id} className="rounded-xl border border-white/10 bg-slate-900/60 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-slate-100">{log.action}</span>
+                      <span className="text-xs text-slate-300/70">{fmtDateTime(log.createdAt)}</span>
                     </div>
-                    <p className="text-xs text-white/60 mt-1">
-                      Level: {log.level} | User: {log.userId || "system"} | IP: {log.ip || "—"}
+                    <p className="mt-1 text-xs text-slate-300/75">
+                      Level: {log.level} | User: {log.userId || "system"} | IP: {log.ip || "-"}
                     </p>
-                    <pre className="text-xs text-white/70 mt-2 whitespace-pre-wrap break-all">{safeJson(log.metadata)}</pre>
+                    <pre className="mt-2 whitespace-pre-wrap break-all text-xs text-slate-300/80">{safeJson(log.metadata)}</pre>
                   </div>
                 ))}
-                {auditLogs.length === 0 && <p className="text-sm text-white/50">No logs</p>}
+                {auditLogs.length === 0 && <p className="text-sm text-slate-400">No logs</p>}
               </div>
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

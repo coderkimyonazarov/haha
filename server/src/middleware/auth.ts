@@ -62,9 +62,19 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
 };
 
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  // Simple check for our admin cookie for internal admin tasks
   const adminCookie = req.cookies?.["sypev_admin"];
-  if (adminCookie) {
+  if (adminCookie === "true") {
+    req.admin = true;
+    return next();
+  }
+
+  const metadata = (req.user?.user_metadata ?? {}) as Record<string, unknown>;
+  const isAdminByMetadata =
+    metadata.isAdmin === true ||
+    metadata.is_admin === true ||
+    metadata.role === "admin";
+
+  if (isAdminByMetadata) {
     req.admin = true;
     return next();
   }

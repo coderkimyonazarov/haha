@@ -31,13 +31,24 @@ app.use(
 );
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
+app.use(requestId);
+
 const normalizeOrigin = (value: string) => value.replace(/\/$/, "");
 
-const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
+const configuredOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((s) => s.trim())
-  .map(normalizeOrigin)
   .filter(Boolean);
+const allowAnyConfiguredOrigin = configuredOrigins.includes("*");
+
+const allowedOrigins = configuredOrigins
+  .filter((origin) => origin !== "*")
+  .map(normalizeOrigin);
+
+const appUrl = (process.env.APP_URL || "").trim();
+if (appUrl) {
+  allowedOrigins.push(normalizeOrigin(appUrl));
+}
 
 const allowLocalCors = process.env.ALLOW_LOCAL_CORS !== "false";
 
@@ -77,35 +88,84 @@ function isLocalOrigin(origin: string): boolean {
   }
 }
 
+function isPublicCorsPath(pathname: string): boolean {
+  return (
+    pathname === "/api/auth/health-auth" ||
+    pathname === "/api/auth/telegram/config"
+  );
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  const normalizedOrigin = normalizeOrigin(origin);
+  return (
+    allowedOrigins.includes(normalizedOrigin) ||
+    (allowLocalCors && isLocalOrigin(normalizedOrigin)) ||
+    normalizedOrigin.endsWith(".vercel.app") ||
+    normalizedOrigin === "https://sypev.com" ||
+    normalizedOrigin === "https://www.sypev.com" ||
+    normalizedOrigin === "http://sypev.com" ||
+    normalizedOrigin === "http://www.sypev.com"
+  );
+}
+
 app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      const normalizedOrigin = normalizeOrigin(origin);
+  cors((req, callback) => {
+    const origin = req.header("origin");
 
-      const isAllowed =
-        allowedOrigins.includes(normalizedOrigin) ||
-        (allowLocalCors && isLocalOrigin(normalizedOrigin)) ||
-        normalizedOrigin.endsWith(".vercel.app") ||
-        normalizedOrigin === "https://sypev.com" ||
-        normalizedOrigin === "https://www.sypev.com" ||
-        normalizedOrigin === "http://sypev.com" ||
-        normalizedOrigin === "http://www.sypev.com";
+    if (!origin) {
+      return callback(null, {
+        origin: true,
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: [
+          "Content-Type",
+          "Authorization",
+          "x-custom-auth",
+          "sypev-admin",
+          "x-bot-secret",
+          "x-requested-with",
+        ],
+      });
+    }
 
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-custom-auth", "sypev-admin", "x-bot-secret"],
+    try {
+      const allowThisOrigin =
+        allowAnyConfiguredOrigin ||
+        isAllowedOrigin(origin) ||
+        (isPublicCorsPath(req.path) && /^https?:\/\//i.test(origin));
+
+      return callback(null, {
+        origin: allowThisOrigin ? origin : false,
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: [
+          "Content-Type",
+          "Authorization",
+          "x-custom-auth",
+          "sypev-admin",
+          "x-bot-secret",
+          "x-requested-with",
+        ],
+      });
+    } catch {
+      return callback(null, {
+        origin: false,
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: [
+          "Content-Type",
+          "Authorization",
+          "x-custom-auth",
+          "sypev-admin",
+          "x-bot-secret",
+          "x-requested-with",
+        ],
+      });
+    }
   }),
 );
 
 // ── Global Middleware ─────────────────────────────────────────────────────────
-app.use(requestId);
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(globalLimiter);
@@ -126,8 +186,8 @@ app.use("/api/sat", authOptional, satRouter);
 app.use("/api/ai", authOptional, aiRouter);
 app.use("/api/bot", authOptional, botRouter);
 
-// Admin routes
-app.use("/api/admin", requireAdmin, adminRouter);
+// Admin routes (cookie or admin-capable bearer token)
+app.use("/api/admin", authOptional, requireAdmin, adminRouter);
 
 // ── Static + SPA Fallback ─────────────────────────────────────────────────────
 const distPath = path.join(__dirname, "..", "..", "web", "dist");

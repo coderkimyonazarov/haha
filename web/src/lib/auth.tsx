@@ -111,12 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
-      // eslint-disable-next-line no-console
-      console.info("[auth] state change", {
-        event: _event,
-        userId: session?.user?.id ?? null,
-        provider: session?.user?.app_metadata?.provider ?? null,
-      });
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.info("[auth] state change", {
+          event: _event,
+          userId: session?.user?.id ?? null,
+          provider: session?.user?.app_metadata?.provider ?? null,
+        });
+      }
 
       if (session?.access_token) {
         clearCustomAccessToken();
