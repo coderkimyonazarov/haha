@@ -2,20 +2,19 @@ import dotenv from "dotenv";
 import path from "path";
 
 const envCandidates = [
-  path.resolve(process.cwd(), ".env"),
   path.resolve(process.cwd(), "server/.env"),
+  path.resolve(process.cwd(), ".env"),
 ];
 
-let loaded = false;
+let loadedCount = 0;
 for (const envPath of envCandidates) {
   const result = dotenv.config({ path: envPath });
   if (!result.error) {
-    loaded = true;
-    break;
+    loadedCount += 1;
   }
 }
 
-if (!loaded) {
+if (loadedCount === 0) {
   dotenv.config(); // last fallback: default dotenv resolution
 }
 

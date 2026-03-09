@@ -4,7 +4,7 @@ import { Router } from "express";
 import jwt from "jsonwebtoken";
 
 import { getDb, getDbConfigStatus, isDatabaseHealthy } from "../db";
-import { linkedIdentities, studentProfiles } from "../db/schema";
+import { linkedIdentities, studentProfiles, userPreferences } from "../db/schema";
 import { validateTelegramAuth, getTelegramDisplayName, type TelegramAuthData } from "../services/telegramAuth";
 import { getSupabaseAdmin, getSupabaseAnon, getSupabaseConfigStatus } from "../utils/supabase";
 import { AppError } from "../utils/error";
@@ -18,6 +18,7 @@ import {
   normalizeUsername,
   validateNormalizedUsername,
 } from "../validators/auth";
+import { accentSchema, personaSchema, themeSchema, vibeSchema } from "../validators/profile";
 import { z } from "zod";
 
 const router = Router();
@@ -25,11 +26,51 @@ const router = Router();
 const TELEGRAM_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REGISTER_INFLIGHT_TTL_MS = 20_000;
 const LOGIN_INFLIGHT_TTL_MS = 15_000;
+const TELEGRAM_CONFIG_CACHE_MS = 10 * 60 * 1000;
 const registerInFlight = new Map<string, number>();
 const loginInFlight = new Map<string, number>();
+let telegramBotConfigCache: { username: string | null; fetchedAt: number } | null = null;
+
+const preferencesUpdateSchema = z
+  .object({
+    theme: themeSchema.optional(),
+    accent: accentSchema.optional(),
+    vibe: vibeSchema.optional(),
+    persona: personaSchema.optional(),
+    onboardingDone: z.boolean().optional(),
+    funCardEnabled: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "At least one field is required");
+
 const setPasswordSchema = z.object({
   password: z.string().min(8).max(128),
 });
+
+type ThemeMode = z.infer<typeof themeSchema>;
+type Accent = z.infer<typeof accentSchema>;
+type Vibe = z.infer<typeof vibeSchema>;
+type Persona = z.infer<typeof personaSchema>;
+
+type PreferencesShape = {
+  userId: string;
+  theme: ThemeMode;
+  accent: Accent;
+  vibe: Vibe;
+  persona: Persona;
+  onboardingDone: boolean;
+  funCardEnabled: boolean;
+  updatedAt?: Date | null;
+};
+
+const DEFAULT_PREFERENCES: Omit<PreferencesShape, "userId"> = {
+  theme: "system",
+  accent: "sky",
+  vibe: "minimal",
+  persona: "clean_minimal",
+  onboardingDone: false,
+  funCardEnabled: true,
+  updatedAt: null,
+};
 
 function formatErrorForLog(error: unknown) {
   if (error instanceof Error) {
@@ -59,6 +100,102 @@ function logAuthDebug(
     return;
   }
   console.log(`[auth:${scope}][${requestId}] ${message}${payload}`);
+}
+
+function mapPersonaToVibe(persona: Persona): Vibe {
+  if (persona === "bold_dark") {
+    return "bold";
+  }
+  if (persona === "soft_cute" || persona === "energetic_fun") {
+    return "playful";
+  }
+  return "minimal";
+}
+
+function parseInterests(raw: unknown): string[] {
+  if (!raw || typeof raw !== "string") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim().toLowerCase())
+      .filter((item) => item.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function profileHasCompletedOnboarding(profile: any | null): boolean {
+  if (!profile) {
+    return false;
+  }
+
+  const interests = parseInterests(profile.interestsJson);
+  return Boolean(
+    profile.firstName &&
+      profile.lastName &&
+      profile.gender &&
+      profile.birthYear &&
+      interests.length > 0,
+  );
+}
+
+function normalizePreferencesRow(userId: string, row?: any): PreferencesShape {
+  const theme = themeSchema.safeParse(row?.theme).success ? (row.theme as ThemeMode) : DEFAULT_PREFERENCES.theme;
+  const accent = accentSchema.safeParse(row?.accent).success
+    ? (row.accent as Accent)
+    : DEFAULT_PREFERENCES.accent;
+  const persona = personaSchema.safeParse(row?.persona).success
+    ? (row.persona as Persona)
+    : DEFAULT_PREFERENCES.persona;
+  const vibeFromRow = vibeSchema.safeParse(row?.vibe).success ? (row.vibe as Vibe) : mapPersonaToVibe(persona);
+
+  return {
+    userId,
+    theme,
+    accent,
+    persona,
+    vibe: vibeFromRow,
+    onboardingDone: Boolean(row?.onboardingDone ?? DEFAULT_PREFERENCES.onboardingDone),
+    funCardEnabled: Boolean(row?.funCardEnabled ?? DEFAULT_PREFERENCES.funCardEnabled),
+    updatedAt: row?.updatedAt ?? null,
+  };
+}
+
+async function getOrCreateUserPreferences(userId: string, requestId: string): Promise<PreferencesShape> {
+  if (!isDatabaseHealthy()) {
+    return { userId, ...DEFAULT_PREFERENCES };
+  }
+
+  try {
+    const db = getDb();
+    const rows = await db
+      .select()
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, userId))
+      .limit(1);
+
+    if (rows[0]) {
+      return normalizePreferencesRow(userId, rows[0]);
+    }
+
+    const defaults = { userId, ...DEFAULT_PREFERENCES, updatedAt: new Date() };
+    await db.insert(userPreferences).values(defaults).onConflictDoNothing({
+      target: userPreferences.userId,
+    });
+    return normalizePreferencesRow(userId, defaults);
+  } catch (error) {
+    logAuthDebug("preferences", requestId, "failed to read preferences, fallback defaults", {
+      error: formatErrorForLog(error),
+    }, "error");
+    return { userId, ...DEFAULT_PREFERENCES };
+  }
 }
 
 function getTelegramJwtSecret(): string {
@@ -243,6 +380,23 @@ async function resolveSupabaseUserFromBearerToken(authorization?: string) {
   } = await getSupabaseAdmin().auth.getUser(token);
 
   if (error || !user) {
+    const customSecret = process.env.APP_AUTH_JWT_SECRET;
+    if (!customSecret) {
+      return null;
+    }
+
+    try {
+      const payload = jwt.verify(token, customSecret) as { sub?: string; provider?: string };
+      if (payload?.provider === "telegram" && payload.sub) {
+        const {
+          data: { user: telegramUser },
+        } = await getSupabaseAdmin().auth.admin.getUserById(payload.sub);
+        return telegramUser ?? null;
+      }
+    } catch {
+      return null;
+    }
+
     return null;
   }
 
@@ -254,8 +408,8 @@ function signTelegramToken(userId: string, telegramUserId: string): string {
 
   return jwt.sign(
     {
-      iss: "test_bro_api",
-      aud: "test_bro_telegram",
+      iss: "sypev_api",
+      aud: "sypev_telegram",
       sub: userId,
       provider: "telegram",
       telegram_user_id: telegramUserId,
@@ -266,6 +420,88 @@ function signTelegramToken(userId: string, telegramUserId: string): string {
       expiresIn: TELEGRAM_TOKEN_TTL_SECONDS,
     },
   );
+}
+
+function getConfiguredTelegramBotUsername(): string | null {
+  const fromEnv = process.env.TELEGRAM_BOT_USERNAME?.trim();
+  if (fromEnv) {
+    return fromEnv.startsWith("@") ? fromEnv.slice(1) : fromEnv;
+  }
+  return null;
+}
+
+function normalizeHostname(value: string): string | null {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    if (trimmed.includes("://")) {
+      return new URL(trimmed).hostname.toLowerCase();
+    }
+    return trimmed.split(":")[0].toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function getRequiredTelegramDomain(): string | null {
+  const explicit = normalizeHostname(process.env.TELEGRAM_WIDGET_DOMAIN ?? "");
+  if (explicit) {
+    return explicit;
+  }
+
+  const fromAppUrl = normalizeHostname(process.env.APP_URL ?? "");
+  if (fromAppUrl) {
+    return fromAppUrl;
+  }
+
+  return null;
+}
+
+async function resolveTelegramBotUsername(requestId: string): Promise<string | null> {
+  const fromEnv = getConfiguredTelegramBotUsername();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) {
+    return null;
+  }
+
+  const now = Date.now();
+  if (telegramBotConfigCache && now - telegramBotConfigCache.fetchedAt < TELEGRAM_CONFIG_CACHE_MS) {
+    return telegramBotConfigCache.username;
+  }
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`telegram_get_me_status_${response.status}`);
+    }
+
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      result?: { username?: string };
+    };
+    const username = payload.ok ? payload.result?.username ?? null : null;
+    telegramBotConfigCache = { username, fetchedAt: now };
+    return username;
+  } catch (error) {
+    logAuthDebug("telegram", requestId, "failed to resolve bot username", {
+      error: formatErrorForLog(error),
+    }, "error");
+    telegramBotConfigCache = { username: null, fetchedAt: now };
+    return null;
+  }
 }
 
 router.get("/health-auth", authReadLimiter, async (req, res) => {
@@ -308,6 +544,95 @@ router.get("/health-auth", authReadLimiter, async (req, res) => {
       },
     });
   }
+});
+
+router.get("/telegram/config", authReadLimiter, async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+  const requiredDomain = getRequiredTelegramDomain();
+  const originHost = normalizeHostname(
+    typeof req.headers.origin === "string" ? req.headers.origin : "",
+  );
+  const headerHost = normalizeHostname(
+    typeof req.headers.host === "string" ? req.headers.host : "",
+  );
+  const currentHost = originHost ?? headerHost;
+  const domainMatch =
+    !requiredDomain ||
+    !currentHost ||
+    currentHost === requiredDomain ||
+    currentHost.endsWith(`.${requiredDomain}`);
+
+  if (!botToken) {
+    return res.json({
+      ok: true,
+      data: {
+        enabled: false,
+        botUsername: null,
+        requiredDomain,
+        currentHost,
+        domainMatch: false,
+        error: "Telegram bot is not configured",
+      },
+    });
+  }
+
+  if (!requiredDomain) {
+    return res.json({
+      ok: true,
+      data: {
+        enabled: false,
+        botUsername: null,
+        requiredDomain: null,
+        currentHost,
+        domainMatch: false,
+        error:
+          "Telegram widget domain is not configured. Set TELEGRAM_WIDGET_DOMAIN and BotFather /setdomain.",
+      },
+    });
+  }
+
+  if (!domainMatch) {
+    return res.json({
+      ok: true,
+      data: {
+        enabled: false,
+        botUsername: null,
+        requiredDomain,
+        currentHost,
+        domainMatch: false,
+        error: `Bot domain invalid for this host. Configure BotFather /setdomain to ${requiredDomain} and open the app from that domain.`,
+      },
+    });
+  }
+
+  const botUsername = await resolveTelegramBotUsername(requestId);
+  if (!botUsername) {
+    return res.json({
+      ok: true,
+      data: {
+        enabled: false,
+        botUsername: null,
+        requiredDomain,
+        currentHost,
+        domainMatch: Boolean(domainMatch),
+        error: "Telegram bot username is unavailable",
+      },
+    });
+  }
+
+  return res.json({
+    ok: true,
+    data: {
+      enabled: true,
+      botUsername,
+      botUrl: `https://t.me/${botUsername}`,
+      requiredDomain,
+      currentHost,
+      domainMatch: Boolean(domainMatch),
+      error: null,
+    },
+  });
 });
 
 router.get("/check-username", authReadLimiter, async (req, res) => {
@@ -515,6 +840,15 @@ router.post("/register", authLimiter, async (req, res) => {
         .insert(studentProfiles)
         .values({ userId: created.user.id })
         .onConflictDoNothing({ target: studentProfiles.userId });
+
+      await getDb()
+        .insert(userPreferences)
+        .values({
+          userId: created.user.id,
+          ...DEFAULT_PREFERENCES,
+          updatedAt: new Date(),
+        })
+        .onConflictDoNothing({ target: userPreferences.userId });
     } catch (dbError) {
       logAuthDebug("register", requestId, "profile row insert skipped due db failure", {
         userId: created.user.id,
@@ -1026,6 +1360,11 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
       );
 
       if (updateMetadataError) {
+        logAuthDebug("telegram", requestId, "telegram metadata update failed", {
+          userId: sessionUser.id,
+          telegramUserId,
+          supabaseError: updateMetadataError.message,
+        }, "error");
         throw new AppError("AUTH_SERVICE_UNAVAILABLE", "Telegram linking failed", 503);
       }
 
@@ -1160,6 +1499,15 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
         .insert(studentProfiles)
         .values({ userId })
         .onConflictDoNothing({ target: studentProfiles.userId });
+
+      await db
+        .insert(userPreferences)
+        .values({
+          userId,
+          ...DEFAULT_PREFERENCES,
+          updatedAt: new Date(),
+        })
+        .onConflictDoNothing({ target: userPreferences.userId });
     }
 
     const accessToken = signTelegramToken(userId, telegramUserId);
@@ -1186,14 +1534,109 @@ router.post("/telegram", authLimiter, async (req, res, next) => {
   }
 });
 
+router.patch("/preferences", authLimiter, async (req, res) => {
+  const requestId = ((req as { id?: string }).id ?? "unknown").toString();
+
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        ok: false,
+        error: {
+          code: "UNAUTHORIZED",
+          message: "Authentication required",
+        },
+      });
+    }
+
+    const input = parseWithSchema(preferencesUpdateSchema, req.body);
+    const current = await getOrCreateUserPreferences(req.user.id, requestId);
+    const nextPersona = input.persona ?? current.persona;
+    const nextVibe = input.vibe ?? mapPersonaToVibe(nextPersona);
+
+    const nextPayload: PreferencesShape = {
+      ...current,
+      theme: input.theme ?? current.theme,
+      accent: input.accent ?? current.accent,
+      persona: nextPersona,
+      vibe: nextVibe,
+      onboardingDone: input.onboardingDone ?? current.onboardingDone,
+      funCardEnabled: input.funCardEnabled ?? current.funCardEnabled,
+      updatedAt: new Date(),
+    };
+
+    if (isDatabaseHealthy()) {
+      try {
+        const db = getDb();
+        await db
+          .insert(userPreferences)
+          .values(nextPayload)
+          .onConflictDoUpdate({
+            target: userPreferences.userId,
+            set: {
+              theme: nextPayload.theme,
+              accent: nextPayload.accent,
+              vibe: nextPayload.vibe,
+              persona: nextPayload.persona,
+              onboardingDone: nextPayload.onboardingDone,
+              funCardEnabled: nextPayload.funCardEnabled,
+              updatedAt: new Date(),
+            },
+          });
+      } catch (dbError) {
+        logAuthDebug("preferences", requestId, "preferences db write failed", {
+          userId: req.user.id,
+          error: formatErrorForLog(dbError),
+        }, "error");
+        return res.status(503).json({
+          ok: false,
+          error: {
+            code: "AUTH_SERVICE_UNAVAILABLE",
+            message: "Preferences service temporarily unavailable",
+          },
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        ...nextPayload,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError && error.status === 400) {
+      return res.status(400).json({
+        ok: false,
+        error: {
+          code: "INVALID_INPUT",
+          message: "Invalid preferences payload",
+        },
+      });
+    }
+
+    logAuthDebug("preferences", requestId, "route failed", {
+      error: formatErrorForLog(error),
+    }, "error");
+    return res.status(503).json({
+      ok: false,
+      error: {
+        code: "AUTH_SERVICE_UNAVAILABLE",
+        message: "Preferences service temporarily unavailable",
+      },
+    });
+  }
+});
+
 router.get("/me", async (req, res, next) => {
   try {
+    const requestId = ((req as { id?: string }).id ?? "unknown").toString();
     if (!req.user) {
       return res.json({ ok: true, data: { user: null } });
     }
 
     let profileRows: any[] = [];
     let providerRows: { provider: string; linkedAt: Date }[] = [];
+    const preferences = await getOrCreateUserPreferences(req.user.id, requestId);
     try {
       const db = getDb();
       profileRows = await db
@@ -1238,11 +1681,19 @@ router.get("/me", async (req, res, next) => {
     }
 
     const profile = profileRows[0] ?? null;
+    const profileInterests = parseInterests(profile?.interestsJson);
+    const metadataInterests = Array.isArray(adminUser?.user_metadata?.interests)
+      ? (adminUser?.user_metadata?.interests as unknown[])
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.toLowerCase())
+      : [];
     const usernameFromMetadata =
       typeof adminUser?.user_metadata?.username === "string"
         ? normalizeUsername(adminUser.user_metadata.username)
         : null;
     const effectiveUsername = profile?.username ?? usernameFromMetadata;
+    const onboardingByProfile = profileHasCompletedOnboarding(profile);
+    const onboardingDone = Boolean(preferences.onboardingDone && onboardingByProfile);
 
     return res.json({
       ok: true,
@@ -1251,12 +1702,25 @@ router.get("/me", async (req, res, next) => {
           id: req.user.id,
           email: req.user.email ?? null,
           username: effectiveUsername ?? null,
-          name: (req.user.user_metadata?.name as string | undefined) ?? "User",
+          name:
+            [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim() ||
+            (req.user.user_metadata?.name as string | undefined) ||
+            "User",
           isAdmin: 0,
           isVerified: req.user.email_confirmed_at ? 1 : 0,
           needsUsername: !effectiveUsername,
+          needsOnboarding: !onboardingDone,
         },
-        profile,
+        profile: profile
+          ? {
+              ...profile,
+              interests: profileInterests.length > 0 ? profileInterests : metadataInterests,
+            }
+          : null,
+        preferences: {
+          ...preferences,
+          onboardingDone,
+        },
         providers: Array.from(providersMap.entries()).map(([provider, linkedAt]) => ({
           provider,
           linkedAt,
@@ -1318,6 +1782,7 @@ router.post("/logout", async (_req, res) => {
 router.post("/admin-login", authLimiter, async (req, res, next) => {
   try {
     const { username, password } = req.body;
+    const isProduction = process.env.NODE_ENV === "production";
     if (
       username === process.env.ADMIN_USERNAME &&
       password === process.env.ADMIN_PASSWORD &&
@@ -1325,8 +1790,8 @@ router.post("/admin-login", authLimiter, async (req, res, next) => {
     ) {
       res.cookie("sypev_admin", "true", {
         httpOnly: true,
-        secure: true,
-        sameSite: "none",
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
         maxAge: 1000 * 60 * 60 * 24 * 7,
       });
       return res.json({ ok: true, data: { admin: true } });
@@ -1339,10 +1804,11 @@ router.post("/admin-login", authLimiter, async (req, res, next) => {
 
 router.post("/admin-logout", async (_req, res, next) => {
   try {
+    const isProduction = process.env.NODE_ENV === "production";
     res.clearCookie("sypev_admin", {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
     });
     res.json({ ok: true, data: { loggedOut: true } });
   } catch (error) {

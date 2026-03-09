@@ -1,21 +1,29 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  adminGetStats,
-  adminGetUsers,
-  adminDeleteUser,
-  adminToggleAdmin,
-  adminGetUniversities,
   adminAddUniversity,
   adminDeleteUniversity,
+  adminDeleteUser,
+  adminGetAiInsights,
+  adminGetAuditLogs,
+  adminGetErrors,
+  adminGetEvents,
+  adminGetStats,
+  adminGetUniversities,
+  adminGetUsers,
   adminLogout,
+  adminToggleAdmin,
+  type AdminAiInsight,
+  type AdminAuditLog,
+  type AdminErrorItem,
+  type AdminEvent,
   type AdminStats,
-  type AdminUser,
   type AdminUniversity,
+  type AdminUser,
 } from "../api";
 
-/* ─── tiny helpers ────────────────────────────────────────────────────── */
-function fmtDate(ts: number) {
+function fmtDate(ts?: number | null) {
+  if (!ts) return "—";
   return new Date(ts).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -23,7 +31,25 @@ function fmtDate(ts: number) {
   });
 }
 
-/* ─── stat card ────────────────────────────────────────────────────────── */
+function fmtDateTime(ts?: number | null) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function safeJson(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 function StatCard({
   label,
   value,
@@ -37,33 +63,26 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-2xl border p-6 flex items-center gap-5 transition-all hover:scale-[1.02]"
+      className="rounded-2xl border p-5 flex items-center gap-4"
       style={{
         background: "rgba(255,255,255,0.04)",
         borderColor: "rgba(255,255,255,0.1)",
-        backdropFilter: "blur(12px)",
       }}
     >
       <div
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-2xl"
-        style={{ background: color + "22", color }}
+        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
+        style={{ background: `${color}22`, color }}
       >
         {icon}
       </div>
       <div>
-        <div className="text-3xl font-bold text-white">{value}</div>
-        <div
-          className="text-sm mt-0.5"
-          style={{ color: "rgba(255,255,255,0.5)" }}
-        >
-          {label}
-        </div>
+        <div className="text-2xl font-bold text-white">{value}</div>
+        <div className="text-xs uppercase tracking-wide text-white/50">{label}</div>
       </div>
     </div>
   );
 }
 
-/* ─── add university modal ──────────────────────────────────────────────── */
 function AddUniversityModal({
   onClose,
   onAdded,
@@ -96,6 +115,7 @@ function AddUniversityModal({
       setErr("Name and state are required");
       return;
     }
+
     setLoading(true);
     setErr("");
     try {
@@ -112,170 +132,45 @@ function AddUniversityModal({
       });
       onAdded();
       onClose();
-    } catch (e: any) {
-      setErr(e?.message || "Failed to add university");
+    } catch (error: any) {
+      setErr(error?.message || "Failed to add university");
     } finally {
       setLoading(false);
     }
   };
 
-  const fieldStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 10,
-    color: "white",
-    padding: "10px 14px",
-    width: "100%",
-    fontSize: 14,
-    outline: "none",
-  };
-  const label = (txt: string) => (
-    <label
-      style={{
-        fontSize: 12,
-        color: "rgba(255,255,255,0.5)",
-        textTransform: "uppercase",
-        letterSpacing: 1,
-      }}
-    >
-      {txt}
-    </label>
-  );
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-xl rounded-2xl p-8 shadow-2xl"
-        style={{
-          background: "#0f1117",
-          border: "1px solid rgba(255,255,255,0.12)",
-        }}
+        className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0f1117] p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold text-white mb-6">Add University</h2>
+        <h2 className="text-xl font-semibold text-white mb-4">Add University</h2>
         <form onSubmit={submit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              {label("Name *")}
-              <input
-                style={fieldStyle}
-                value={form.name}
-                onChange={inp("name")}
-                placeholder="Harvard University"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              {label("State *")}
-              <input
-                style={fieldStyle}
-                value={form.state}
-                onChange={inp("state")}
-                placeholder="Massachusetts"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Name *" value={form.name} onChange={inp("name")} />
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="State *" value={form.state} onChange={inp("state")} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              {label("Tuition (USD)")}
-              <input
-                style={fieldStyle}
-                type="number"
-                value={form.tuitionUsd}
-                onChange={inp("tuitionUsd")}
-                placeholder="55000"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              {label("Aid Policy")}
-              <input
-                style={fieldStyle}
-                value={form.aidPolicy}
-                onChange={inp("aidPolicy")}
-                placeholder="Need-blind"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Tuition USD" value={form.tuitionUsd} onChange={inp("tuitionUsd")} />
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Aid Policy" value={form.aidPolicy} onChange={inp("aidPolicy")} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              {label("SAT Min")}
-              <input
-                style={fieldStyle}
-                type="number"
-                value={form.satRangeMin}
-                onChange={inp("satRangeMin")}
-                placeholder="1400"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              {label("SAT Max")}
-              <input
-                style={fieldStyle}
-                type="number"
-                value={form.satRangeMax}
-                onChange={inp("satRangeMax")}
-                placeholder="1570"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="SAT Min" value={form.satRangeMin} onChange={inp("satRangeMin")} />
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="SAT Max" value={form.satRangeMax} onChange={inp("satRangeMax")} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              {label("English Req")}
-              <input
-                style={fieldStyle}
-                value={form.englishReq}
-                onChange={inp("englishReq")}
-                placeholder="IELTS 7.0"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              {label("App Deadline")}
-              <input
-                style={fieldStyle}
-                value={form.applicationDeadline}
-                onChange={inp("applicationDeadline")}
-                placeholder="Jan 1, 2026"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="English Requirement" value={form.englishReq} onChange={inp("englishReq")} />
+            <input className="rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white" placeholder="Application Deadline" value={form.applicationDeadline} onChange={inp("applicationDeadline")} />
           </div>
-          <div className="flex flex-col gap-1">
-            {label("Description")}
-            <textarea
-              style={{ ...fieldStyle, resize: "none", height: 80 }}
-              value={form.description}
-              onChange={inp("description")}
-              placeholder="Brief description…"
-            />
-          </div>
-          {err && <p className="text-red-400 text-sm">{err}</p>}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors"
-              style={{
-                background: "rgba(255,255,255,0.07)",
-                color: "rgba(255,255,255,0.7)",
-                border: "1px solid rgba(255,255,255,0.1)",
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all"
-              style={{
-                background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                color: "white",
-                opacity: loading ? 0.6 : 1,
-              }}
-            >
-              {loading ? "Adding…" : "Add University"}
-            </button>
+          <textarea className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-sm text-white min-h-[90px]" placeholder="Description" value={form.description} onChange={inp("description")} />
+          {err && <p className="text-sm text-red-400">{err}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/15 bg-white/5 py-2 text-sm text-white/80">Cancel</button>
+            <button type="submit" disabled={loading} className="flex-1 rounded-lg bg-indigo-500 py-2 text-sm font-semibold text-white disabled:opacity-60">{loading ? "Adding..." : "Add University"}</button>
           </div>
         </form>
       </div>
@@ -283,8 +178,7 @@ function AddUniversityModal({
   );
 }
 
-/* ─── main admin panel ──────────────────────────────────────────────────── */
-type Tab = "overview" | "users" | "universities";
+type Tab = "overview" | "users" | "universities" | "observability";
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -292,9 +186,13 @@ export default function AdminPanel() {
   const [tab, setTab] = React.useState<Tab>("overview");
   const [stats, setStats] = React.useState<AdminStats | null>(null);
   const [users, setUsers] = React.useState<AdminUser[]>([]);
-  const [unis, setUnis] = React.useState<AdminUniversity[]>([]);
+  const [universities, setUniversities] = React.useState<AdminUniversity[]>([]);
+  const [auditLogs, setAuditLogs] = React.useState<AdminAuditLog[]>([]);
+  const [events, setEvents] = React.useState<AdminEvent[]>([]);
+  const [errors, setErrors] = React.useState<AdminErrorItem[]>([]);
+  const [insight, setInsight] = React.useState<AdminAiInsight | null>(null);
+  const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
-  const [loadingData, setLoadingData] = React.useState(false);
   const [showAddUni, setShowAddUni] = React.useState(false);
 
   async function handleAdminLogout() {
@@ -302,368 +200,243 @@ export default function AdminPanel() {
     navigate("/admin/login");
   }
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  React.useEffect(() => {
-    load();
-  }, [tab]);
+  const loadOverview = React.useCallback(async () => {
+    const [s, ai, ev, er] = await Promise.all([
+      adminGetStats(),
+      adminGetAiInsights(),
+      adminGetEvents(40),
+      adminGetErrors(20),
+    ]);
+    setStats(s);
+    setInsight(ai);
+    setEvents(Array.isArray(ev) ? ev : []);
+    setErrors(Array.isArray(er) ? er : []);
+  }, []);
 
-  async function load() {
-    setLoadingData(true);
+  const loadUsers = React.useCallback(async () => {
+    const u = await adminGetUsers({ limit: 300 });
+    setUsers(Array.isArray(u) ? u : []);
+  }, []);
+
+  const loadUniversities = React.useCallback(async () => {
+    const list = await adminGetUniversities();
+    setUniversities(Array.isArray(list) ? list : []);
+  }, []);
+
+  const loadObservability = React.useCallback(async () => {
+    const [logs, ev, er] = await Promise.all([
+      adminGetAuditLogs(300),
+      adminGetEvents(300),
+      adminGetErrors(150),
+    ]);
+    setAuditLogs(Array.isArray(logs) ? logs : []);
+    setEvents(Array.isArray(ev) ? ev : []);
+    setErrors(Array.isArray(er) ? er : []);
+  }, []);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
     try {
       if (tab === "overview") {
-        const s = await adminGetStats();
-        setStats(s);
+        await loadOverview();
       } else if (tab === "users") {
-        const u = await adminGetUsers({ limit: 100 });
-        setUsers(u);
+        await loadUsers();
       } else if (tab === "universities") {
-        const list = await adminGetUniversities();
-        setUnis(list);
+        await loadUniversities();
+      } else {
+        await loadObservability();
       }
-    } catch {
-      /* ignore */
     } finally {
-      setLoadingData(false);
+      setLoading(false);
     }
-  }
+  }, [tab, loadOverview, loadUsers, loadUniversities, loadObservability]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  React.useEffect(() => {
+    if (tab !== "overview") return;
+    const timer = window.setInterval(() => {
+      loadOverview().catch(() => {});
+    }, 90_000);
+    return () => window.clearInterval(timer);
+  }, [tab, loadOverview]);
 
   async function deleteUser(id: string) {
-    if (!confirm("Delete this user permanently?")) return;
+    if (!window.confirm("Delete this user permanently?")) return;
     await adminDeleteUser(id);
-    setUsers((u) => u.filter((x) => x.id !== id));
+    setUsers((prev) => prev.filter((u) => u.id !== id));
   }
 
   async function toggleAdmin(id: string) {
     const updated = await adminToggleAdmin(id);
-    setUsers((u) =>
-      u.map((x) => (x.id === id ? { ...x, isAdmin: updated.isAdmin } : x)),
-    );
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, isAdmin: updated.isAdmin } : u)));
   }
 
-  async function deleteUni(id: string) {
-    if (!confirm("Delete this university?")) return;
+  async function deleteUniversity(id: string) {
+    if (!window.confirm("Delete this university?")) return;
     await adminDeleteUniversity(id);
-    setUnis((u) => u.filter((x) => x.id !== id));
+    setUniversities((prev) => prev.filter((u) => u.id !== id));
   }
 
-  const filteredUsers = users.filter(
-    (u) =>
-      !search ||
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      (u.email && u.email.toLowerCase().includes(search.toLowerCase())),
-  );
-  const filteredUnis = unis.filter(
-    (u) => !search || u.name.toLowerCase().includes(search.toLowerCase()),
-  );
+  const userList = Array.isArray(users) ? users : [];
+  const uniList = Array.isArray(universities) ? universities : [];
 
-  const panelBg: React.CSSProperties = {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg,#0a0c14 0%,#0d1120 50%,#0a0c14 100%)",
-    fontFamily: "'Space Grotesk', sans-serif",
-  };
+  const filteredUsers = userList.filter((u) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return u.name.toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q);
+  });
 
-  const tabBtn = (t: Tab, label: string, icon: string) => (
+  const filteredUniversities = uniList.filter((u) => {
+    if (!search) return true;
+    return u.name.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const tabButton = (value: Tab, title: string) => (
     <button
+      key={value}
       onClick={() => {
-        setTab(t);
+        setTab(value);
         setSearch("");
       }}
-      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all"
-      style={
-        tab === t
-          ? {
-              background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-              color: "white",
-            }
-          : { color: "rgba(255,255,255,0.5)", background: "transparent" }
-      }
+      className={`rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+        tab === value ? "bg-indigo-500 text-white" : "bg-transparent text-white/60"
+      }`}
     >
-      <span>{icon}</span>
-      {label}
+      {title}
     </button>
   );
 
-  const thStyle: React.CSSProperties = {
-    padding: "12px 16px",
-    textAlign: "left",
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    color: "rgba(255,255,255,0.35)",
-    borderBottom: "1px solid rgba(255,255,255,0.07)",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "14px 16px",
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
-    borderBottom: "1px solid rgba(255,255,255,0.05)",
-  };
-  const badgeStyle = (isAdmin: number): React.CSSProperties => ({
-    padding: "3px 10px",
-    borderRadius: 100,
-    fontSize: 11,
-    fontWeight: 600,
-    background: isAdmin ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.06)",
-    color: isAdmin ? "#a5b4fc" : "rgba(255,255,255,0.4)",
-  });
-
   return (
-    <div style={panelBg}>
-      {showAddUni && (
-        <AddUniversityModal
-          onClose={() => setShowAddUni(false)}
-          onAdded={load}
-        />
-      )}
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0c14] via-[#0d1120] to-[#0a0c14] text-white">
+      {showAddUni && <AddUniversityModal onClose={() => setShowAddUni(false)} onAdded={loadUniversities} />}
 
-      {/* Top bar */}
-      <div
-        className="sticky top-0 z-30 flex items-center justify-between px-8 py-4"
-        style={{
-          background: "rgba(10,12,20,0.85)",
-          backdropFilter: "blur(20px)",
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-        }}
-      >
+      <div className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0c14]/85 backdrop-blur px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-sm font-bold"
-            style={{
-              background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-              color: "white",
-            }}
-          >
-            ⚡
-          </div>
-          <span className="text-white font-bold text-lg">Sypev Admin</span>
-          <span
-            className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-            style={{ background: "rgba(239,68,68,0.15)", color: "#f87171" }}
-          >
-            RESTRICTED
-          </span>
+          <div className="h-9 w-9 rounded-xl bg-indigo-500 flex items-center justify-center text-sm font-bold">⚡</div>
+          <p className="text-lg font-semibold">Sypev Admin</p>
+          <span className="rounded-full bg-red-500/15 text-red-300 px-2 py-0.5 text-xs font-semibold">RESTRICTED</span>
         </div>
-        <div className="flex items-center gap-4">
-          <div
-            className="flex items-center gap-2 text-sm"
-            style={{ color: "rgba(255,255,255,0.5)" }}
-          >
-            <span>👤</span>
-            <span>Admin</span>
-          </div>
-          <button
-            onClick={handleAdminLogout}
-            className="rounded-xl px-4 py-2 text-xs font-semibold transition-all hover:opacity-80"
-            style={{
-              background: "rgba(239,68,68,0.15)",
-              color: "#f87171",
-              border: "1px solid rgba(239,68,68,0.25)",
-            }}
-          >
-            Sign Out
-          </button>
-        </div>
+        <button onClick={handleAdminLogout} className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300">
+          Sign Out
+        </button>
       </div>
 
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        {/* Tab navigation */}
-        <div
-          className="flex gap-1 rounded-2xl p-1.5 mb-8 w-fit"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          {tabBtn("overview", "Overview", "📊")}
-          {tabBtn("users", "Users", "👥")}
-          {tabBtn("universities", "Universities", "🎓")}
+      <div className="mx-auto max-w-7xl px-6 py-6">
+        <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/5 p-1.5 w-fit">
+          {tabButton("overview", "Overview")}
+          {tabButton("users", "Users")}
+          {tabButton("universities", "Universities")}
+          {tabButton("observability", "Observability")}
         </div>
 
-        {/* Loading */}
-        {loadingData && (
-          <div
-            className="flex items-center gap-2 mb-6"
-            style={{ color: "rgba(255,255,255,0.4)" }}
-          >
-            <div
-              className="h-4 w-4 rounded-full border-2 border-t-transparent animate-spin"
-              style={{ borderColor: "#6366f1", borderTopColor: "transparent" }}
-            />
-            <span className="text-sm">Loading…</span>
-          </div>
-        )}
+        {loading && <p className="text-sm text-white/60 mb-4">Loading...</p>}
 
-        {/* ── Overview ── */}
-        {tab === "overview" && stats && (
-          <div>
-            <h1 className="text-2xl font-bold text-white mb-6">
-              Dashboard Overview
-            </h1>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-              <StatCard
-                label="Total Users"
-                value={stats.users}
-                icon="👥"
-                color="#6366f1"
-              />
-              <StatCard
-                label="Universities"
-                value={stats.universities}
-                icon="🎓"
-                color="#8b5cf6"
-              />
-              <StatCard
-                label="Active Sessions"
-                value={stats.activeSessions}
-                icon="🔐"
-                color="#06b6d4"
-              />
+        {tab === "overview" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard label="Total Users" value={stats?.users ?? 0} icon="👥" color="#6366f1" />
+              <StatCard label="Universities" value={stats?.universities ?? 0} icon="🎓" color="#8b5cf6" />
+              <StatCard label="Recent Errors" value={stats?.recentErrors ?? 0} icon="🚨" color="#ef4444" />
             </div>
 
-            <div
-              className="rounded-2xl p-6"
-              style={{
-                background: "rgba(99,102,241,0.08)",
-                border: "1px solid rgba(99,102,241,0.2)",
-              }}
-            >
-              <h2 className="text-lg font-semibold text-white mb-2">
-                🔑 Security Notice
-              </h2>
-              <p
-                style={{
-                  color: "rgba(255,255,255,0.55)",
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                }}
-              >
-                This admin panel is protected by server-side{" "}
-                <code
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                  }}
+            <div className="rounded-2xl border border-indigo-400/30 bg-indigo-500/10 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-lg">AI Product Insight</h2>
+                <button
+                  onClick={() => loadOverview().catch(() => {})}
+                  className="rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 text-xs"
                 >
-                  requireAdmin
-                </code>{" "}
-                middleware. All API requests without a valid admin session
-                return <strong style={{ color: "#f87171" }}>HTTP 403</strong>.
-                Users cannot gain admin access without running the{" "}
-                <code
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                  }}
-                >
-                  setAdmin.ts
-                </code>{" "}
-                CLI script on the server.
+                  Refresh
+                </button>
+              </div>
+              <p className="text-xs text-white/60 mb-2">
+                Generated: {fmtDateTime(insight?.generatedAt)} | Mode: {insight?.mode || "N/A"}
               </p>
+              <pre className="whitespace-pre-wrap text-sm leading-6 text-white/90 bg-black/20 rounded-xl p-4 border border-white/10">
+                {insight?.summary || "No insight yet."}
+              </pre>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h3 className="font-semibold mb-3">Latest Events</h3>
+                <div className="space-y-2 max-h-[360px] overflow-auto">
+                  {events.slice(0, 12).map((event) => (
+                    <div key={event.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{event.type}</span>
+                        <span className="text-xs text-white/50">{fmtDateTime(event.createdAt)}</span>
+                      </div>
+                      <p className="text-xs text-white/60 mt-1">Level: {event.level} | User: {event.userId || "system"}</p>
+                    </div>
+                  ))}
+                  {events.length === 0 && <p className="text-sm text-white/50">No events</p>}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h3 className="font-semibold mb-3">Latest Errors & Fix Hints</h3>
+                <div className="space-y-2 max-h-[360px] overflow-auto">
+                  {errors.slice(0, 12).map((error) => (
+                    <div key={error.id} className="rounded-lg border border-red-300/20 bg-red-500/10 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-red-200">{error.code}</span>
+                        <span className="text-xs text-red-200/70">{fmtDateTime(error.createdAt)}</span>
+                      </div>
+                      <p className="text-sm text-red-100 mt-1">{error.message}</p>
+                      <p className="text-xs text-red-100/80 mt-2">Fix: {error.fixHint}</p>
+                    </div>
+                  ))}
+                  {errors.length === 0 && <p className="text-sm text-white/50">No errors</p>}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── Users ── */}
         {tab === "users" && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-bold text-white">
-                Users{" "}
-                <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 18 }}>
-                  ({filteredUsers.length})
-                </span>
-              </h1>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Users ({filteredUsers.length})</h2>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name or email…"
-                className="rounded-xl px-4 py-2.5 text-sm w-64"
-                style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "white",
-                  outline: "none",
-                }}
+                placeholder="Search user/email..."
+                className="rounded-lg bg-white/10 border border-white/15 px-3 py-2 text-sm w-72"
               />
             </div>
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.02)",
-              }}
-            >
-              <table className="w-full">
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    <th style={thStyle}>Name</th>
-                    <th style={thStyle}>Email</th>
-                    <th style={thStyle}>Role</th>
-                    <th style={thStyle}>Joined</th>
-                    <th style={thStyle}>Actions</th>
+                  <tr className="text-white/60 border-b border-white/10">
+                    <th className="text-left py-2">Name</th>
+                    <th className="text-left py-2">Email</th>
+                    <th className="text-left py-2">Providers</th>
+                    <th className="text-left py-2">Role</th>
+                    <th className="text-left py-2">Joined</th>
+                    <th className="text-left py-2">Last Sign-In</th>
+                    <th className="text-left py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="transition-colors hover:bg-white/[0.02]"
-                    >
-                      <td style={tdStyle}>
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold"
-                            style={{
-                              background: "rgba(99,102,241,0.2)",
-                              color: "#a5b4fc",
-                            }}
-                          >
-                            {u.name.charAt(0).toUpperCase()}
-                          </div>
-                          {u.name}
-                        </div>
-                      </td>
-                      <td
-                        style={{ ...tdStyle, color: "rgba(255,255,255,0.5)" }}
-                      >
-                        {u.email || "—"}
-                      </td>
-                      <td style={tdStyle}>
-                        <span style={badgeStyle(u.isAdmin)}>
-                          {u.isAdmin ? "Admin" : "User"}
-                        </span>
-                      </td>
-                      <td
-                        style={{ ...tdStyle, color: "rgba(255,255,255,0.4)" }}
-                      >
-                        {fmtDate(u.createdAt)}
-                      </td>
-                      <td style={tdStyle}>
+                    <tr key={u.id} className="border-b border-white/5">
+                      <td className="py-2">{u.name}</td>
+                      <td className="py-2 text-white/70">{u.email || "—"}</td>
+                      <td className="py-2 text-white/70">{(u.providers || []).join(", ") || "—"}</td>
+                      <td className="py-2">{u.isAdmin ? "Admin" : "User"}</td>
+                      <td className="py-2 text-white/70">{fmtDate(u.createdAt)}</td>
+                      <td className="py-2 text-white/70">{fmtDateTime(u.lastSignInAt)}</td>
+                      <td className="py-2">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => toggleAdmin(u.id)}
-                            className="rounded-lg px-3 py-1.5 text-xs font-medium transition-all hover:opacity-80"
-                            style={{
-                              background: "rgba(99,102,241,0.15)",
-                              color: "#a5b4fc",
-                              border: "1px solid rgba(99,102,241,0.3)",
-                            }}
-                          >
+                          <button onClick={() => toggleAdmin(u.id)} className="rounded-md px-2 py-1 text-xs bg-indigo-500/20 border border-indigo-300/30">
                             {u.isAdmin ? "Revoke Admin" : "Make Admin"}
                           </button>
-                          {u.isAdmin ? null : (
-                            <button
-                              onClick={() => deleteUser(u.id)}
-                              className="rounded-lg px-3 py-1.5 text-xs font-medium transition-all hover:opacity-80"
-                              style={{
-                                background: "rgba(239,68,68,0.12)",
-                                color: "#f87171",
-                                border: "1px solid rgba(239,68,68,0.25)",
-                              }}
-                            >
+                          {!u.isAdmin && (
+                            <button onClick={() => deleteUser(u.id)} className="rounded-md px-2 py-1 text-xs bg-red-500/20 border border-red-300/30">
                               Delete
                             </button>
                           )}
@@ -673,126 +446,49 @@ export default function AdminPanel() {
                   ))}
                 </tbody>
               </table>
-              {filteredUsers.length === 0 && !loadingData && (
-                <div
-                  className="py-12 text-center"
-                  style={{ color: "rgba(255,255,255,0.25)" }}
-                >
-                  No users found
-                </div>
-              )}
+              {filteredUsers.length === 0 && <p className="text-sm text-white/50 py-8 text-center">No users</p>}
             </div>
           </div>
         )}
 
-        {/* ── Universities ── */}
         {tab === "universities" && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-bold text-white">
-                Universities{" "}
-                <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 18 }}>
-                  ({filteredUnis.length})
-                </span>
-              </h1>
-              <div className="flex items-center gap-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Universities ({filteredUniversities.length})</h2>
+              <div className="flex gap-2">
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search…"
-                  className="rounded-xl px-4 py-2.5 text-sm w-52"
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "white",
-                    outline: "none",
-                  }}
+                  placeholder="Search university..."
+                  className="rounded-lg bg-white/10 border border-white/15 px-3 py-2 text-sm w-72"
                 />
-                <button
-                  onClick={() => setShowAddUni(true)}
-                  className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all hover:opacity-90"
-                  style={{
-                    background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                    color: "white",
-                  }}
-                >
-                  ＋ Add University
+                <button onClick={() => setShowAddUni(true)} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold">
+                  Add University
                 </button>
               </div>
             </div>
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.02)",
-              }}
-            >
-              <table className="w-full">
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    <th style={thStyle}>Name</th>
-                    <th style={thStyle}>State</th>
-                    <th style={thStyle}>Tuition</th>
-                    <th style={thStyle}>SAT Range</th>
-                    <th style={thStyle}>Aid</th>
-                    <th style={thStyle}>Action</th>
+                  <tr className="text-white/60 border-b border-white/10">
+                    <th className="text-left py-2">Name</th>
+                    <th className="text-left py-2">State</th>
+                    <th className="text-left py-2">Tuition</th>
+                    <th className="text-left py-2">SAT</th>
+                    <th className="text-left py-2">Aid</th>
+                    <th className="text-left py-2">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUnis.map((u) => (
-                    <tr
-                      key={u.id}
-                      className="transition-colors hover:bg-white/[0.02]"
-                    >
-                      <td
-                        style={{ ...tdStyle, fontWeight: 500, color: "white" }}
-                      >
-                        {u.name}
-                      </td>
-                      <td
-                        style={{ ...tdStyle, color: "rgba(255,255,255,0.5)" }}
-                      >
-                        {u.state}
-                      </td>
-                      <td
-                        style={{ ...tdStyle, color: "rgba(255,255,255,0.6)" }}
-                      >
-                        {u.tuitionUsd
-                          ? `$${u.tuitionUsd.toLocaleString()}`
-                          : "—"}
-                      </td>
-                      <td
-                        style={{ ...tdStyle, color: "rgba(255,255,255,0.5)" }}
-                      >
-                        {u.satRangeMin && u.satRangeMax
-                          ? `${u.satRangeMin}–${u.satRangeMax}`
-                          : "—"}
-                      </td>
-                      <td style={tdStyle}>
-                        {u.aidPolicy ? (
-                          <span
-                            className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-                            style={{
-                              background: "rgba(6,182,212,0.15)",
-                              color: "#67e8f9",
-                            }}
-                          >
-                            {u.aidPolicy}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td style={tdStyle}>
-                        <button
-                          onClick={() => deleteUni(u.id)}
-                          className="rounded-lg px-3 py-1.5 text-xs font-medium transition-all hover:opacity-80"
-                          style={{
-                            background: "rgba(239,68,68,0.12)",
-                            color: "#f87171",
-                            border: "1px solid rgba(239,68,68,0.25)",
-                          }}
-                        >
+                  {filteredUniversities.map((u) => (
+                    <tr key={u.id} className="border-b border-white/5">
+                      <td className="py-2">{u.name}</td>
+                      <td className="py-2 text-white/70">{u.state}</td>
+                      <td className="py-2 text-white/70">{u.tuitionUsd ? `$${u.tuitionUsd.toLocaleString()}` : "—"}</td>
+                      <td className="py-2 text-white/70">{u.satRangeMin && u.satRangeMax ? `${u.satRangeMin}–${u.satRangeMax}` : "—"}</td>
+                      <td className="py-2 text-white/70">{u.aidPolicy || "—"}</td>
+                      <td className="py-2">
+                        <button onClick={() => deleteUniversity(u.id)} className="rounded-md px-2 py-1 text-xs bg-red-500/20 border border-red-300/30">
                           Delete
                         </button>
                       </td>
@@ -800,14 +496,70 @@ export default function AdminPanel() {
                   ))}
                 </tbody>
               </table>
-              {filteredUnis.length === 0 && !loadingData && (
-                <div
-                  className="py-12 text-center"
-                  style={{ color: "rgba(255,255,255,0.25)" }}
-                >
-                  No universities found
-                </div>
-              )}
+              {filteredUniversities.length === 0 && <p className="text-sm text-white/50 py-8 text-center">No universities</p>}
+            </div>
+          </div>
+        )}
+
+        {tab === "observability" && (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button onClick={() => loadObservability().catch(() => {})} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm">
+                Refresh Logs
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h3 className="font-semibold mb-3">Errors ({errors.length})</h3>
+              <div className="space-y-2 max-h-[320px] overflow-auto">
+                {errors.map((error) => (
+                  <div key={error.id} className="rounded-lg border border-red-300/20 bg-red-500/10 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-red-200">{error.code}</span>
+                      <span className="text-xs text-red-200/70">{fmtDateTime(error.createdAt)}</span>
+                    </div>
+                    <p className="text-sm text-red-100 mt-1">{error.message}</p>
+                    <p className="text-xs text-red-100/80 mt-2">Fix: {error.fixHint}</p>
+                  </div>
+                ))}
+                {errors.length === 0 && <p className="text-sm text-white/50">No errors</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h3 className="font-semibold mb-3">Events ({events.length})</h3>
+              <div className="space-y-2 max-h-[320px] overflow-auto">
+                {events.map((event) => (
+                  <div key={event.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">{event.type}</span>
+                      <span className="text-xs text-white/60">{fmtDateTime(event.createdAt)}</span>
+                    </div>
+                    <p className="text-xs text-white/60 mt-1">Level: {event.level} | User: {event.userId || "system"}</p>
+                    <pre className="text-xs text-white/70 mt-2 whitespace-pre-wrap break-all">{safeJson(event.details)}</pre>
+                  </div>
+                ))}
+                {events.length === 0 && <p className="text-sm text-white/50">No events</p>}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h3 className="font-semibold mb-3">Audit Logs ({auditLogs.length})</h3>
+              <div className="space-y-2 max-h-[340px] overflow-auto">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">{log.action}</span>
+                      <span className="text-xs text-white/60">{fmtDateTime(log.createdAt)}</span>
+                    </div>
+                    <p className="text-xs text-white/60 mt-1">
+                      Level: {log.level} | User: {log.userId || "system"} | IP: {log.ip || "—"}
+                    </p>
+                    <pre className="text-xs text-white/70 mt-2 whitespace-pre-wrap break-all">{safeJson(log.metadata)}</pre>
+                  </div>
+                ))}
+                {auditLogs.length === 0 && <p className="text-sm text-white/50">No logs</p>}
+              </div>
             </div>
           </div>
         )}

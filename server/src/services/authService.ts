@@ -9,7 +9,9 @@ export async function getUserPreferences(userId: string) {
       theme: "system",
       accent: "sky",
       vibe: "minimal",
+      persona: "clean_minimal",
       onboardingDone: false,
+      funCardEnabled: true,
     };
   }
 
@@ -21,7 +23,9 @@ export async function getUserPreferences(userId: string) {
       theme: "system",
       accent: "sky",
       vibe: "minimal",
+      persona: "clean_minimal",
       onboardingDone: false,
+      funCardEnabled: true,
     };
     await db.insert(userPreferences).values(defaultPrefs);
     return defaultPrefs;
@@ -36,7 +40,9 @@ export async function updatePreferences(userId: string, data: Partial<any>) {
       theme: (data as any)?.theme ?? "system",
       accent: (data as any)?.accent ?? "sky",
       vibe: (data as any)?.vibe ?? "minimal",
+      persona: (data as any)?.persona ?? "clean_minimal",
       onboardingDone: Boolean((data as any)?.onboardingDone ?? false),
+      funCardEnabled: Boolean((data as any)?.funCardEnabled ?? true),
     };
   }
 

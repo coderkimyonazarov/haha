@@ -54,7 +54,7 @@ export default function ForgotPassword() {
           <div>
             <div className="flex items-center gap-2 mb-16">
               <Command className="w-8 h-8 text-primary" />
-              <span className="text-2xl font-bold tracking-tight">Test_Bro</span>
+              <span className="text-2xl font-bold tracking-tight">Sypev</span>
             </div>
             
             <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] mb-6">

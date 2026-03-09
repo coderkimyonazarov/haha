@@ -1,74 +1,111 @@
 import React from "react";
+import { RefreshCw, Sparkles } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import { Sparkles, Flame, Coffee, Quote } from "lucide-react";
-import gsap from "gsap";
+import { Button } from "./ui/button";
+
+type FunCard = {
+  title: string;
+  line: string;
+  microTask: string;
+};
+
+const CARDS: Record<string, FunCard[]> = {
+  soft_cute: [
+    {
+      title: "Small wins mode",
+      line: "Finish one tiny study task now and future-you says thanks.",
+      microTask: "2 minutes: revise one SAT formula.",
+    },
+    {
+      title: "Calm boost",
+      line: "Your momentum matters more than intensity.",
+      microTask: "Write one sentence goal for this session.",
+    },
+  ],
+  bold_dark: [
+    {
+      title: "Focus lock",
+      line: "High output comes from clean priorities, not noise.",
+      microTask: "Close 2 distracting tabs and run one deep block.",
+    },
+    {
+      title: "Precision mode",
+      line: "Sharp execution beats random hustle.",
+      microTask: "Solve 3 hard problems with full explanation.",
+    },
+  ],
+  energetic_fun: [
+    {
+      title: "Energy sprint",
+      line: "Fast loops, clear checkpoints, no boredom.",
+      microTask: "15-minute timer: complete one topic checkpoint.",
+    },
+    {
+      title: "Momentum streak",
+      line: "Keep the streak alive with one meaningful action.",
+      microTask: "Do one admissions task before your next break.",
+    },
+  ],
+  clean_minimal: [
+    {
+      title: "Quiet progress",
+      line: "Consistency scales better than intensity spikes.",
+      microTask: "Clean your plan and keep only top 3 tasks.",
+    },
+    {
+      title: "Signal over noise",
+      line: "Simple systems create reliable results.",
+      microTask: "Update one metric in your profile today.",
+    },
+  ],
+};
+
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash << 5) - hash + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
 
 export default function FunBlock() {
-  const { preferences } = useAuth();
-  const vibe = preferences?.vibe || "minimal";
-  const blockRef = React.useRef<HTMLDivElement>(null);
+  const { user, profile, preferences } = useAuth();
+  const persona = preferences?.persona ?? "clean_minimal";
+  const cards = CARDS[persona] ?? CARDS.clean_minimal;
+  const seedBase = `${user?.id ?? "anon"}:${profile?.interests?.join(",") ?? ""}`;
+  const initialIndex = hashString(seedBase + new Date().toDateString()) % cards.length;
+  const [index, setIndex] = React.useState(initialIndex);
+  const card = cards[index % cards.length];
 
-  React.useEffect(() => {
-    if (blockRef.current) {
-      gsap.fromTo(
-        blockRef.current,
-        { scale: 0.95, opacity: 0 },
-        { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.5)" }
-      );
-    }
-  }, [vibe]);
-
-  if (vibe === "minimal") {
-    return (
-      <div 
-        ref={blockRef}
-        className="px-5 py-4 mt-6 rounded-2xl bg-muted/30 border border-border/50 text-sm flex items-start gap-4"
-      >
-        <Coffee className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
-        <div>
-          <p className="font-medium text-foreground/90">Daily Focus</p>
-          <p className="text-muted-foreground mt-1 leading-relaxed">
-            "Simplicity is the ultimate sophistication." Keep your mind clear and your goals sharp today.
-          </p>
-        </div>
-      </div>
-    );
+  if (preferences && !preferences.funCardEnabled) {
+    return null;
   }
 
-  if (vibe === "playful") {
-    return (
-      <div 
-        ref={blockRef}
-        className="px-5 py-4 mt-6 rounded-[2rem] bg-emerald-500/10 border-2 border-emerald-500/20 text-sm flex items-start gap-4 relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 p-12 bg-emerald-500/20 blur-[30px] rounded-full -z-10" />
-        <Sparkles className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5 fill-emerald-500/20" />
-        <div>
-          <p className="font-bold text-emerald-700 dark:text-emerald-400">You got this!</p>
-          <p className="text-emerald-600/90 dark:text-emerald-300/80 mt-1 leading-relaxed font-medium">
-            Remember to take breaks, drink water, and maybe pet a dog today. 🐶 Your brain needs rest to grow!
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // bold / sigma meme vibe
   return (
-    <div 
-      ref={blockRef}
-      className="px-5 py-4 mt-6 rounded-lg bg-red-500/5 border-l-4 border-red-500 text-sm flex items-start gap-4"
-    >
-      <Flame className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
-      <div>
-        <p className="font-black text-red-600 uppercase tracking-widest text-xs mb-1">Sigma Grindset</p>
-        <p className="font-bold text-foreground">
-          "They sleep, we grind."
-        </p>
-        <p className="text-muted-foreground font-medium mt-1 leading-relaxed text-xs">
-          While your competition is scrolling, you are securing the target SAT score. Do not stop.
-        </p>
+    <div className="mt-6 rounded-2xl border border-primary/25 bg-primary/5 p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">
+            <Sparkles className="h-3.5 w-3.5" />
+            Fun Layer
+          </p>
+          <h4 className="text-lg font-semibold">{card.title}</h4>
+          <p className="text-sm text-muted-foreground">{card.line}</p>
+          <p className="mt-2 text-sm font-medium text-foreground/85">{card.microTask}</p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          onClick={() => setIndex((prev) => (prev + 1) % cards.length)}
+        >
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Rotate
+        </Button>
       </div>
     </div>
   );
 }
+

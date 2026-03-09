@@ -6,6 +6,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../lib/auth";
+import { getPostAuthPath } from "../lib/authRedirect";
 import { toast } from "sonner";
 import { CheckCircle2, AlertCircle, Fingerprint } from "lucide-react";
 import gsap from "gsap";
@@ -34,7 +35,7 @@ export default function SetUsername() {
 
   React.useEffect(() => {
     if (user && user.username) {
-      navigate("/dashboard");
+      navigate(getPostAuthPath(user), { replace: true });
     }
   }, [user, navigate]);
 
@@ -84,7 +85,7 @@ export default function SetUsername() {
       await setUsername(normalizedUsername);
       await refreshProfile();
       toast.success("Username saved");
-      navigate("/onboarding");
+      navigate("/dashboard");
     } catch (err: any) {
       toast.error(err?.message || "Failed to set username");
     } finally {

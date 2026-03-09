@@ -4,7 +4,7 @@ import { User as SupabaseUser, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import * as api from "../api";
 import { User as AppUser, UserPreferences } from "../api";
-import { applyTheme } from "./theme";
+import { applyTheme, normalizeThemeRuntime } from "./theme";
 import { clearCustomAccessToken, getCustomAccessToken, setCustomAccessToken } from "../api/client";
 
 interface AuthState {
@@ -60,10 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await api.me();
       if (data && data.user) {
         if (data.preferences) {
-          applyTheme({
-            ...data.preferences,
-            onboardingDone: Boolean(data.preferences.onboardingDone),
-          });
+          applyTheme(
+            normalizeThemeRuntime({
+              theme: data.preferences.theme,
+              accent: data.preferences.accent,
+              vibe: data.preferences.vibe,
+              persona: data.preferences.persona,
+              gender: data.profile?.gender ?? "prefer_not_to_say",
+            }),
+          );
         }
 
         setState((s) => ({

@@ -1,123 +1,169 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-
-  /* ── 1. BASE (Light/Dark Engine) ────────────────────────────────────────── */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 10%;
+    --background: 215 45% 98%;
+    --foreground: 220 28% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 220 28% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
-    
-    --primary: 200 95% 45%; 
+    --popover-foreground: 220 28% 14%;
+
+    --primary: 201 94% 46%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 10%;
-    
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
-    --accent-bg: 240 5% 96%;
-    --accent-foreground: 240 10% 10%;
-    
-    --destructive: 0 84% 60%;
+    --secondary: 214 28% 95%;
+    --secondary-foreground: 220 22% 20%;
+    --muted: 214 28% 95%;
+    --muted-foreground: 217 12% 46%;
+    --accent-bg: 214 28% 95%;
+    --accent-foreground: 220 22% 20%;
+
+    --destructive: 0 72% 52%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 240 5% 65%;
-    --radius: 0.75rem;
+    --border: 216 22% 88%;
+    --input: 216 22% 88%;
+    --ring: 215 20% 60%;
+    --radius: 0.9rem;
+
+    --font-body: "Manrope", sans-serif;
+    --font-heading: "Sora", sans-serif;
   }
 
   .dark {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 6%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 6%;
-    --popover-foreground: 0 0% 98%;
-    
-    --secondary: 240 10% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 10% 15%;
-    --muted-foreground: 240 5% 65%;
-    --accent-bg: 240 10% 15%;
-    --accent-foreground: 0 0% 98%;
-    
-    --border: 240 10% 18%;
-    --input: 240 10% 18%;
-    --ring: 240 5% 35%;
+    --background: 228 28% 8%;
+    --foreground: 210 34% 96%;
+    --card: 228 24% 11%;
+    --card-foreground: 210 34% 96%;
+    --popover: 228 24% 11%;
+    --popover-foreground: 210 34% 96%;
+
+    --secondary: 228 18% 17%;
+    --secondary-foreground: 210 34% 96%;
+    --muted: 228 18% 17%;
+    --muted-foreground: 218 14% 68%;
+    --accent-bg: 228 18% 17%;
+    --accent-foreground: 210 34% 96%;
+
+    --border: 228 18% 22%;
+    --input: 228 18% 22%;
+    --ring: 223 18% 44%;
   }
 
-  /* ── 2. VIBE / PERSONA ─────────────────────────────────────────────── */
+  [data-persona="clean_minimal"] {
+    --radius: 0.8rem;
+    --font-body: "Manrope", sans-serif;
+    --font-heading: "Sora", sans-serif;
+  }
 
-  /* Minimal / Clean (Default) */
-  [data-vibe="minimal"] {
+  [data-persona="soft_cute"] {
+    --radius: 1.3rem;
+    --font-body: "Outfit", sans-serif;
+    --font-heading: "Outfit", sans-serif;
+    --background: 338 70% 98%;
+    --card: 0 0% 100%;
+    --border: 338 45% 86%;
+  }
+  .dark[data-persona="soft_cute"] {
+    --background: 336 26% 12%;
+    --card: 336 24% 16%;
+    --border: 336 24% 26%;
+  }
+
+  [data-persona="bold_dark"] {
     --radius: 0.5rem;
-    --font-heading: 'Inter', sans-serif;
+    --font-body: "Manrope", sans-serif;
+    --font-heading: "Sora", sans-serif;
+    --background: 220 36% 96%;
+    --foreground: 224 30% 10%;
+    --border: 224 18% 78%;
+  }
+  .dark[data-persona="bold_dark"] {
+    --background: 222 22% 5%;
+    --card: 222 20% 9%;
+    --border: 222 16% 30%;
+    --foreground: 220 36% 96%;
   }
 
-  /* Soft / Cute (Playful) */
-  [data-vibe="playful"] {
-    --radius: 1.5rem;
-    --font-heading: 'Nunito', sans-serif;
-    --background: 340 20% 98%;
-    --primary: 340 80% 65%;
+  [data-persona="energetic_fun"] {
+    --radius: 1.05rem;
+    --font-body: "Outfit", sans-serif;
+    --font-heading: "Sora", sans-serif;
+    --background: 198 72% 97%;
+    --border: 198 54% 83%;
   }
-  .dark[data-vibe="playful"] {
-    --background: 340 20% 8%;
-    --card: 340 20% 12%;
-    --primary: 340 80% 65%;
-  }
-
-  /* Bold / Dark */
-  [data-vibe="bold"] {
-    --radius: 0;
-    --font-heading: 'Syne', sans-serif;
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
-    
-    /* Extreme contrast */
-    --border: 0 0% 0%;
-    --input: 0 0% 0%;
-  }
-  .dark[data-vibe="bold"] {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 5%;
-    --border: 0 0% 30%;
+  .dark[data-persona="energetic_fun"] {
+    --background: 209 36% 9%;
+    --card: 209 34% 13%;
+    --border: 209 24% 30%;
   }
 
-  /* ── 3. ACCENTS ──────────────────────────────────────────────────────── */
-  /* If a specific accent is chosen, it overrides the vibe's primary */
-  [data-accent="sky"] { --primary: 199 89% 48%; }
-  [data-accent="violet"] { --primary: 258 90% 66%; }
-  [data-accent="rose"] { --primary: 346 87% 60%; }
-  [data-accent="amber"] { --primary: 38 92% 50%; }
-  [data-accent="emerald"] { --primary: 158 64% 52%; }
+  [data-gender="female"][data-persona="clean_minimal"] {
+    --radius: 1rem;
+  }
+  [data-gender="male"][data-persona="soft_cute"] {
+    --radius: 1rem;
+  }
 
+  [data-accent="sky"] {
+    --primary: 199 89% 48%;
+  }
+  [data-accent="violet"] {
+    --primary: 260 86% 65%;
+  }
+  [data-accent="rose"] {
+    --primary: 346 82% 58%;
+  }
+  [data-accent="amber"] {
+    --primary: 38 92% 50%;
+  }
+  [data-accent="emerald"] {
+    --primary: 159 74% 42%;
+  }
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground antialiased transition-colors duration-300;
+    font-family: var(--font-body);
   }
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-bold transition-colors duration-300;
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    @apply font-bold;
   }
 }
 
-/* Auth Visual Backgrounds */
 .auth-split-gradient {
-  background: radial-gradient(circle at top left, hsl(var(--primary)/0.15) 0%, transparent 40%),
-              radial-gradient(circle at bottom right, hsl(var(--primary)/0.1) 0%, transparent 40%);
+  background:
+    radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.2), transparent 38%),
+    radial-gradient(circle at 100% 100%, hsl(var(--primary) / 0.12), transparent 42%);
 }
 
 .glass-panel {
-  @apply bg-background/60 backdrop-blur-xl border border-border/50 shadow-2xl;
+  @apply border border-border/50 bg-card/75 shadow-2xl backdrop-blur-xl;
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

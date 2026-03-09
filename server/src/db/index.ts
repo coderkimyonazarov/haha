@@ -32,6 +32,11 @@ async function ensureCoreTables(client: ReturnType<typeof postgres>) {
     CREATE TABLE IF NOT EXISTS student_profiles (
       user_id uuid PRIMARY KEY,
       username text UNIQUE,
+      first_name text,
+      last_name text,
+      gender text,
+      birth_year integer,
+      interests_json text NOT NULL DEFAULT '[]',
       grade integer,
       country text NOT NULL DEFAULT 'Uzbekistan',
       target_major text,
@@ -39,6 +44,7 @@ async function ensureCoreTables(client: ReturnType<typeof postgres>) {
       sat_reading_writing integer,
       sat_total integer,
       ielts_score real,
+      onboarding_completed_at timestamptz,
       updated_at timestamptz NOT NULL DEFAULT now()
     );
 
@@ -95,9 +101,20 @@ async function ensureCoreTables(client: ReturnType<typeof postgres>) {
       theme text NOT NULL DEFAULT 'system',
       accent text NOT NULL DEFAULT 'sky',
       vibe text NOT NULL DEFAULT 'minimal',
+      persona text NOT NULL DEFAULT 'clean_minimal',
       onboarding_done boolean NOT NULL DEFAULT false,
+      fun_card_enabled boolean NOT NULL DEFAULT true,
       updated_at timestamptz NOT NULL DEFAULT now()
     );
+
+    ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS first_name text;
+    ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS last_name text;
+    ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS gender text;
+    ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS birth_year integer;
+    ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS interests_json text NOT NULL DEFAULT '[]';
+    ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS onboarding_completed_at timestamptz;
+    ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS persona text NOT NULL DEFAULT 'clean_minimal';
+    ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS fun_card_enabled boolean NOT NULL DEFAULT true;
 
     CREATE UNIQUE INDEX IF NOT EXISTS linked_identities_provider_uid
       ON linked_identities(provider, provider_user_id);

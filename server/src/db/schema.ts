@@ -54,6 +54,11 @@ export const studentProfiles = pgTable(
   {
     userId: uuid("user_id").primaryKey(), // maps to auth.users.id
     username: text("username").unique(), // our custom username requirement
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    gender: text("gender"),
+    birthYear: integer("birth_year"),
+    interestsJson: text("interests_json").notNull().default("[]"),
     grade: integer("grade"),
     country: text("country").notNull().default("Uzbekistan"),
     targetMajor: text("target_major"),
@@ -61,6 +66,7 @@ export const studentProfiles = pgTable(
     satReadingWriting: integer("sat_reading_writing"),
     satTotal: integer("sat_total"),
     ieltsScore: real("ielts_score"),
+    onboardingCompletedAt: timestamp("onboarding_completed_at"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -136,6 +142,8 @@ export const userPreferences = pgTable("user_preferences", {
   theme: text("theme").notNull().default("system"),
   accent: text("accent").notNull().default("sky"),
   vibe: text("vibe").notNull().default("minimal"),
+  persona: text("persona").notNull().default("clean_minimal"),
   onboardingDone: boolean("onboarding_done").notNull().default(false),
+  funCardEnabled: boolean("fun_card_enabled").notNull().default(true),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

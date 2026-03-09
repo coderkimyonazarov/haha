@@ -1,9 +1,9 @@
 import { gsap } from "gsap";
 import React from "react";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Button } from "./components/ui/button";
 import { AuthProvider, useAuth } from "./lib/auth";
-import { adminMe, adminLogout } from "./api";
+import { adminMe, updatePreferences } from "./api";
 import Admissions from "./routes/Admissions";
 import AdminPanel from "./routes/AdminPanel";
 import Dashboard from "./routes/Dashboard";
@@ -21,24 +21,27 @@ import ForgotPassword from "./routes/ForgotPassword";
 import ResetPassword from "./routes/ResetPassword";
 import AccountSettings from "./routes/AccountSettings";
 import ContentFeed from "./routes/ContentFeed";
+import { Moon, Sun, Monitor } from "lucide-react";
 
 function ProtectedRoute({ children }: { children: React.ReactElement }) {
-  const { user, preferences, loading } = useAuth();
+  const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) {
     return <div className="p-10 text-muted-foreground">Loading...</div>;
   }
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  // 1. Require username
+
   if (!user.username) {
     return <Navigate to="/set-username" replace />;
   }
-  // 2. Require onboarding (if not on onboarding page)
-  const isOnboarding = window.location.pathname === "/onboarding";
-  if (preferences && preferences.onboardingDone === 0 && !isOnboarding) {
+
+  const isOnboarding = location.pathname === "/onboarding";
+  if (user.needsOnboarding && !isOnboarding) {
     return <Navigate to="/onboarding" replace />;
   }
+
   return children;
 }
 
@@ -73,8 +76,9 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, preferences, refresh } = useAuth();
   const shellRef = React.useRef<HTMLDivElement>(null);
+  const [themeUpdating, setThemeUpdating] = React.useState(false);
 
   React.useLayoutEffect(() => {
     if (!shellRef.current) return;
@@ -88,6 +92,31 @@ function Layout({ children }: { children: React.ReactNode }) {
     }, shellRef);
     return () => ctx.revert();
   }, []);
+
+  const handleThemeCycle = async () => {
+    if (!preferences || themeUpdating) {
+      return;
+    }
+
+    const modes: Array<"light" | "dark" | "system"> = ["light", "dark", "system"];
+    const next = modes[(modes.indexOf(preferences.theme) + 1) % modes.length];
+    setThemeUpdating(true);
+    try {
+      await updatePreferences({ theme: next });
+      await refresh();
+    } finally {
+      setThemeUpdating(false);
+    }
+  };
+
+  const modeIcon =
+    preferences?.theme === "light" ? (
+      <Sun className="h-4 w-4" />
+    ) : preferences?.theme === "dark" ? (
+      <Moon className="h-4 w-4" />
+    ) : (
+      <Monitor className="h-4 w-4" />
+    );
 
   return (
     <div
@@ -159,6 +188,16 @@ function Layout({ children }: { children: React.ReactNode }) {
               >
                 Account
               </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleThemeCycle}
+                disabled={themeUpdating || !preferences}
+                className="gap-2"
+              >
+                {modeIcon}
+                <span className="capitalize">{preferences?.theme ?? "mode"}</span>
+              </Button>
               {user.isAdmin === 1 && (
                 <Link
                   to="/admin"

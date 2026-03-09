@@ -9,7 +9,7 @@ export type ApiError = {
 };
 
 const BASE_URL = import.meta.env.VITE_API_URL || "";
-export const CUSTOM_AUTH_TOKEN_KEY = "test_bro_custom_access_token";
+export const CUSTOM_AUTH_TOKEN_KEY = "sypev_custom_access_token";
 
 export function getCustomAccessToken(): string | null {
   return localStorage.getItem(CUSTOM_AUTH_TOKEN_KEY);

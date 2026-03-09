@@ -8,19 +8,24 @@ export type User = {
   isAdmin: number;
   isVerified: number;
   needsUsername?: boolean;
+  needsOnboarding?: boolean;
 };
 
 export type Theme = "light" | "dark" | "system";
 export type Accent = "sky" | "violet" | "rose" | "amber" | "emerald";
 export type Vibe = "minimal" | "playful" | "bold";
+export type Persona = "soft_cute" | "bold_dark" | "clean_minimal" | "energetic_fun";
+export type Gender = "male" | "female" | "non_binary" | "prefer_not_to_say";
 
 export type UserPreferences = {
   userId: string;
   theme: Theme;
   accent: Accent;
   vibe: Vibe;
-  onboardingDone: number;
-  updatedAt: number;
+  persona: Persona;
+  onboardingDone: boolean;
+  funCardEnabled: boolean;
+  updatedAt?: number | string | null;
 };
 
 export type AuthProvider = {
@@ -66,6 +71,11 @@ export type TelegramAuthResponse =
     };
 export type Profile = {
   userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  gender: Gender | null;
+  birthYear: number | null;
+  interests: string[];
   grade: number | null;
   country: string;
   targetMajor: string | null;
@@ -73,7 +83,32 @@ export type Profile = {
   satReadingWriting: number | null;
   satTotal: number | null;
   ieltsScore: number | null;
-  updatedAt: number;
+  updatedAt?: number | string | null;
+};
+
+export type OnboardingPayload = {
+  first_name: string;
+  last_name: string;
+  gender: Gender;
+  birth_year: number;
+  interests: string[];
+  persona: Persona;
+  theme: Theme;
+  accent?: Accent;
+};
+
+export type OnboardingProfile = OnboardingPayload & {
+  onboarding_done: boolean;
+};
+
+export type TelegramConfig = {
+  enabled: boolean;
+  botUsername: string | null;
+  botUrl?: string;
+  requiredDomain?: string | null;
+  currentHost?: string | null;
+  domainMatch?: boolean;
+  error: string | null;
 };
 
 export type University = {
@@ -123,6 +158,10 @@ export async function telegramAuth(data: Record<string, unknown>) {
     "/api/auth/telegram",
     { method: "POST", body: JSON.stringify(data) },
   );
+}
+
+export async function getTelegramConfig() {
+  return apiFetch<TelegramConfig>("/api/auth/telegram/config", {}, { silent: true });
 }
 
 export async function googleAuth(credential: string) {
@@ -202,6 +241,37 @@ export async function updatePreferences(payload: Partial<UserPreferences>) {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+export async function getOnboardingProfile() {
+  return apiFetch<OnboardingProfile>("/api/profile/onboarding");
+}
+
+export async function saveOnboardingProfile(payload: OnboardingPayload) {
+  return apiFetch<{ profile: Profile | null; preferences: UserPreferences | null }>(
+    "/api/profile/onboarding",
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function updatePersonalization(payload: {
+  interests?: string[];
+  persona?: Persona;
+  theme?: Theme;
+  accent?: Accent;
+  vibe?: Vibe;
+  fun_card_enabled?: boolean;
+}) {
+  return apiFetch<{ profile: Profile | null; preferences: UserPreferences | null }>(
+    "/api/profile/personalization",
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 // ── Account Linking ──────────────────────────────────────────────────────────
@@ -345,6 +415,14 @@ export type AdminStats = {
   users: number;
   universities: number;
   activeSessions: number;
+  recentActivity?: number;
+  recentErrors?: number;
+  dbHealthy?: boolean;
+  supabase?: {
+    hasUrl: boolean;
+    hasAnonKey: boolean;
+    hasServiceRoleKey: boolean;
+  };
 };
 export type AdminUser = {
   id: string;
@@ -352,6 +430,8 @@ export type AdminUser = {
   name: string;
   isAdmin: number;
   createdAt: number;
+  lastSignInAt?: number | null;
+  providers?: string[];
 };
 export type AdminUniversity = {
   id: string;
@@ -364,6 +444,41 @@ export type AdminUniversity = {
   englishReq: string | null;
   applicationDeadline: string | null;
   description: string | null;
+};
+
+export type AdminAuditLog = {
+  id: string;
+  userId: string | null;
+  action: string;
+  metadata: unknown;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: number;
+  level: "info" | "warn" | "error";
+};
+
+export type AdminEvent = {
+  id: string;
+  type: string;
+  level: "info" | "warn" | "error";
+  createdAt: number;
+  userId: string | null;
+  details: unknown;
+};
+
+export type AdminErrorItem = {
+  id: string;
+  code: string;
+  message: string;
+  createdAt: number;
+  details: unknown;
+  fixHint: string;
+};
+
+export type AdminAiInsight = {
+  generatedAt: number;
+  mode: string;
+  summary: string;
 };
 
 export async function adminGetStats() {
@@ -380,7 +495,19 @@ export async function adminGetUsers(params?: {
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const qs = q.toString();
-  return apiFetch<AdminUser[]>(`/api/admin/users${qs ? `?${qs}` : ""}`);
+  const data = await apiFetch<AdminUser[] | { users?: AdminUser[] }>(
+    `/api/admin/users${qs ? `?${qs}` : ""}`,
+  );
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (data && typeof data === "object" && Array.isArray(data.users)) {
+    return data.users;
+  }
+
+  return [];
 }
 
 export async function adminDeleteUser(id: string) {
@@ -421,4 +548,23 @@ export async function adminDeleteUniversity(id: string) {
   return apiFetch<{ deleted: boolean }>(`/api/admin/universities/${id}`, {
     method: "DELETE",
   });
+}
+
+export async function adminGetAuditLogs(limit = 200) {
+  const qs = new URLSearchParams({ limit: String(limit) }).toString();
+  return apiFetch<AdminAuditLog[]>(`/api/admin/audit-logs?${qs}`);
+}
+
+export async function adminGetEvents(limit = 200) {
+  const qs = new URLSearchParams({ limit: String(limit) }).toString();
+  return apiFetch<AdminEvent[]>(`/api/admin/events?${qs}`);
+}
+
+export async function adminGetErrors(limit = 200) {
+  const qs = new URLSearchParams({ limit: String(limit) }).toString();
+  return apiFetch<AdminErrorItem[]>(`/api/admin/errors?${qs}`);
+}
+
+export async function adminGetAiInsights() {
+  return apiFetch<AdminAiInsight>("/api/admin/ai-insights");
 }

@@ -120,7 +120,7 @@ export default function AiChat() {
                         : "bg-muted/80 backdrop-blur-sm border border-border/50 rounded-tl-none"
                     }`}
                   >
-                    {msg.text}
+                    <div className="whitespace-pre-wrap leading-relaxed">{msg.text}</div>
                   </div>
                 </div>
               ))

@@ -1,162 +1,226 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  ArrowRight,
+  Bot,
+  BookOpen,
+  Brain,
+  GraduationCap,
+  Palette,
+  Rocket,
+  ShieldAlert,
+  Clock3,
+} from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useAuth } from "../lib/auth";
 import FunBlock from "../components/FunBlock";
-import { ArrowRight, BookOpen, Target, Sparkles, GraduationCap } from "lucide-react";
-import gsap from "gsap";
+
+function getAiSuggestion(params: {
+  firstName: string;
+  interests: string[];
+  satTotal: number | null;
+  persona: string;
+}) {
+  const { firstName, interests, satTotal, persona } = params;
+  const topInterest = interests[0] ?? "study";
+  const scoreLine =
+    typeof satTotal === "number"
+      ? `Your current SAT total is ${satTotal}, so focus on the weakest subsection first.`
+      : "No SAT baseline detected yet, so create a diagnostic score to unlock stronger recommendations.";
+
+  const personaLine =
+    persona === "bold_dark"
+      ? "Use 40-minute deep-work blocks with strict breaks."
+      : persona === "soft_cute"
+        ? "Use gentler 20-minute focus cycles to keep momentum stable."
+        : persona === "energetic_fun"
+          ? "Keep study dynamic: short cycles, visible checkpoints, quick wins."
+          : "Keep your plan minimal: top 3 priorities only.";
+
+  return `${firstName}, based on your ${topInterest} interest: ${scoreLine} ${personaLine}`;
+}
 
 export default function Dashboard() {
-  const { profile, user } = useAuth();
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const { user, profile, preferences, providers } = useAuth();
+  const firstName = profile?.firstName || user?.name?.split(" ")[0] || "Student";
+  const interests = profile?.interests ?? [];
+  const aiSuggestion = getAiSuggestion({
+    firstName,
+    interests,
+    satTotal: profile?.satTotal ?? null,
+    persona: preferences?.persona ?? "clean_minimal",
+  });
 
-  React.useEffect(() => {
-    if (containerRef.current) {
-      gsap.fromTo(
-        ".animate-dash",
-        { y: 20, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.6, stagger: 0.1, ease: "power2.out" }
-      );
-    }
-  }, []);
+  const telegramLinked = Boolean(providers.find((provider) => provider.provider === "telegram"));
 
   return (
-    <div className="space-y-10 pb-20" ref={containerRef}>
-      
-      {/* Premium Top Area */}
-      <section className="relative overflow-hidden rounded-[2.5rem] glass-panel border-b-0">
-        <div className="absolute inset-0 bg-primary/5 dark:bg-primary/10" />
-        <div className="absolute top-0 right-0 p-32 bg-primary/20 rounded-full blur-[120px] -z-10" />
-        
-        <div className="relative z-10 p-8 md:p-12 lg:p-16 grid gap-8 lg:grid-cols-[1.5fr_1fr] items-center">
-          <div className="space-y-6 animate-dash">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-background/80 border text-xs font-bold uppercase tracking-widest text-primary shadow-sm backdrop-blur-md">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Sypev Horizon Workspace</span>
-            </div>
-            
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.05]">
-              Welcome back, <br className="hidden md:block"/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary/60">
-                {user?.name || user?.username || "Scholar"}.
-              </span>
+    <div className="space-y-8 pb-20">
+      <section className="overflow-hidden rounded-3xl border border-border/70 bg-card/80 p-6 sm:p-8">
+        <div className="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
+          <div className="space-y-4">
+            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Personalized Hub</p>
+            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Welcome back, <span className="text-primary">{firstName}</span>
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed max-w-xl">
-              Your personalized command center for SAT mastery and university admissions strategy.
+            <p className="max-w-xl text-base text-muted-foreground">
+              Your dashboard adapts to your profile, persona, and interests to keep every session
+              more relevant.
             </p>
-            
-            <div className="flex flex-wrap items-center gap-4 pt-4">
-              <Button asChild size="lg" className="h-12 px-8 font-semibold rounded-2xl group">
+            <div className="flex flex-wrap gap-2">
+              {interests.length > 0 ? (
+                interests.map((interest: string) => (
+                  <span
+                    key={interest}
+                    className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold capitalize text-primary"
+                  >
+                    {interest}
+                  </span>
+                ))
+              ) : (
+                <span className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+                  Add interests in onboarding/settings
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <Button asChild>
                 <Link to="/study/sat">
-                  Launch Study Plan
-                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                  Continue SAT plan
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
-              <Button asChild variant="outline" size="lg" className="h-12 px-8 font-semibold rounded-2xl bg-background/50 hover:bg-background">
-                <Link to="/admissions">Admissions Radar</Link>
+              <Button asChild variant="outline">
+                <Link to="/account">Open settings</Link>
               </Button>
             </div>
-
             <FunBlock />
           </div>
 
-          <div className="animate-dash h-full flex items-center justify-end">
-            <div className="w-full max-w-sm glass-panel bg-card/80 p-6 rounded-3xl border shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-[40px] -z-10" />
-              
-              <div className="flex items-start justify-between mb-8">
-                <div>
-                  <h3 className="text-xl font-bold">Snapshot</h3>
-                  <p className="text-sm font-medium text-muted-foreground mt-1">Latest diagnostic scores</p>
-                </div>
-                <div className="p-2.5 bg-background rounded-xl shadow-sm border">
-                  <Target className="w-5 h-5 text-primary" />
-                </div>
-              </div>
-
-              {profile?.satTotal ? (
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40 font-medium text-sm border-border/50 border">
-                      <span className="text-muted-foreground">Math</span>
-                      <span className="text-base font-bold text-foreground">{profile.satMath}</span>
-                    </div>
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-muted/40 font-medium text-sm border-border/50 border">
-                      <span className="text-muted-foreground">Reading & Writing</span>
-                      <span className="text-base font-bold text-foreground">{profile.satReadingWriting}</span>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-primary text-primary-foreground flex items-center justify-between shadow-lg shadow-primary/20">
-                    <span className="font-semibold">Aggregate Score</span>
-                    <span className="text-2xl font-black">{profile.satTotal}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-6 px-4 bg-muted/30 rounded-2xl border border-dashed border-border flex flex-col items-center">
-                  <div className="w-12 h-12 bg-background rounded-full flex items-center justify-center mb-3 shadow-sm border block">
-                    <Target className="w-5 h-5 text-muted-foreground" />
-                  </div>
-                  <p className="text-sm font-medium text-foreground">No baseline taken.</p>
-                  <p className="text-xs text-muted-foreground mt-1 text-center leading-relaxed">
-                    Add a diagnostic score to unlock smart recommendations and tracking.
-                  </p>
-                  <Button asChild variant="ghost" className="mt-2 h-auto px-0 text-primary">
-                    <Link to="/profile">Update Profile</Link>
-                  </Button>
-                </div>
-              )}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">AI Suggestion</p>
+              <p className="mt-2 text-sm leading-relaxed">{aiSuggestion}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Telegram</p>
+              <p className="mt-2 text-sm leading-relaxed">
+                {telegramLinked
+                  ? "Telegram is linked to this account. You can use Telegram login safely."
+                  : "Telegram is not linked yet. Link it from Account to enable one-tap Telegram sign-in."}
+              </p>
+              <Button asChild variant="ghost" className="mt-2 px-0">
+                <Link to="/account">
+                  Manage providers
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Modules */}
-      <section className="grid gap-6 md:grid-cols-3 animate-dash">
-        <Link to="/study/sat" className="group block h-full">
-          <div className="glass-panel h-full p-8 rounded-[2rem] hover:border-primary/50 transition-colors relative overflow-hidden flex flex-col">
-            <div className="p-3 w-fit rounded-2xl bg-primary/10 text-primary mb-6 group-hover:scale-110 transition-transform">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <h3 className="text-2xl font-bold mb-2">SAT Study Engine</h3>
-            <p className="text-muted-foreground leading-relaxed flex-1">
-              Dive into personalized workflows covering Math and R&W topics mapped to your exact weaknesses.
-            </p>
-            <div className="mt-8 flex items-center text-sm font-semibold text-primary">
-              Enter Module <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        <Link
+          to="/study/sat"
+          className="rounded-2xl border border-border/70 bg-card/70 p-5 transition-colors hover:border-primary/40"
+        >
+          <BookOpen className="h-6 w-6 text-primary" />
+          <h3 className="mt-3 text-xl font-semibold">SAT Engine</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Practice by topic and monitor score progression with cleaner feedback.
+          </p>
         </Link>
 
-        <Link to="/admissions" className="group block h-full">
-          <div className="glass-panel h-full p-8 rounded-[2rem] hover:border-primary/50 transition-colors relative overflow-hidden flex flex-col">
-            <div className="p-3 w-fit rounded-2xl bg-emerald-500/10 text-emerald-500 mb-6 group-hover:scale-110 transition-transform">
-              <GraduationCap className="w-6 h-6" />
-            </div>
-            <h3 className="text-2xl font-bold mb-2">Admissions Radar</h3>
-            <p className="text-muted-foreground leading-relaxed flex-1">
-              Automatically calculate safety, target, and reach schools aligned with your metrics.
-            </p>
-            <div className="mt-8 flex items-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-              Calculate Matches <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
+        <Link
+          to="/admissions"
+          className="rounded-2xl border border-border/70 bg-card/70 p-5 transition-colors hover:border-primary/40"
+        >
+          <GraduationCap className="h-6 w-6 text-primary" />
+          <h3 className="mt-3 text-xl font-semibold">Admissions Radar</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Match safety/target/reach universities from your updated profile.
+          </p>
         </Link>
 
-        <Link to="/tutor" className="group block h-full">
-          <div className="glass-panel h-full p-8 rounded-[2rem] hover:border-primary/50 transition-colors relative overflow-hidden flex flex-col">
-            <div className="p-3 w-fit rounded-2xl bg-violet-500/10 text-violet-500 mb-6 group-hover:scale-110 transition-transform">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <h3 className="text-2xl font-bold mb-2">AI Counselor</h3>
-            <p className="text-muted-foreground leading-relaxed flex-1">
-              Interact with a custom AI designed to guide you through tricky problems or admission anxiety.
-            </p>
-            <div className="mt-8 flex items-center text-sm font-semibold text-violet-600 dark:text-violet-400">
-              Start Chatting <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
+        <Link
+          to="/tutor"
+          className="rounded-2xl border border-border/70 bg-card/70 p-5 transition-colors hover:border-primary/40"
+        >
+          <Brain className="h-6 w-6 text-primary" />
+          <h3 className="mt-3 text-xl font-semibold">AI Counselor</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ask tailored questions with your persona and interests in context.
+          </p>
         </Link>
+      </section>
+
+      <section className="rounded-2xl border border-border/70 bg-card/70 p-5">
+        <div className="flex items-center gap-2">
+          <Palette className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold">Current style profile</h3>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Persona</p>
+            <p className="mt-1 text-sm font-semibold capitalize">
+              {(preferences?.persona ?? "clean_minimal").replace(/_/g, " ")}
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Theme</p>
+            <p className="mt-1 text-sm font-semibold capitalize">{preferences?.theme ?? "system"}</p>
+          </div>
+          <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Bot + Link</p>
+            <p className="mt-1 text-sm font-semibold flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              {telegramLinked ? "Linked" : "Not linked"}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <article className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-5">
+          <div className="flex items-center gap-2">
+            <Rocket className="h-5 w-5 text-emerald-600" />
+            <h3 className="text-lg font-semibold">Yangi funksiyalar</h3>
+          </div>
+          <ul className="mt-3 space-y-2 text-sm text-foreground/90">
+            <li>
+              foydalanuvchilar sonini ko&apos;paytirish uchun ochiq universitetlar bilan hamkorlik
+              qilish
+            </li>
+            <li>
+              foydalanuvchilarga ko&apos;proq xizmat ko&apos;rsatish uchun AI yordamida darsliklar yaratish
+            </li>
+          </ul>
+        </article>
+
+        <article className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-5">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-600" />
+            <h3 className="text-lg font-semibold">Aniqlangan xatolar/risklar va tuzatish ishlari</h3>
+          </div>
+          <ul className="mt-3 space-y-2 text-sm text-foreground/90">
+            <li>admin kirish huquqi yo&apos;qligi sababli xatolar</li>
+            <li>xatolarni tuzatish uchun admin kirish huquqini sozlash</li>
+            <li>foydalanuvchilarni avtorizatsiya qilish</li>
+          </ul>
+        </article>
+
+        <article className="rounded-2xl border border-sky-500/25 bg-sky-500/5 p-5">
+          <div className="flex items-center gap-2">
+            <Clock3 className="h-5 w-5 text-sky-600" />
+            <h3 className="text-lg font-semibold">Kelgusi 24 soat ichida bajariladigan ishlar</h3>
+          </div>
+          <ul className="mt-3 space-y-2 text-sm text-foreground/90">
+            <li>xatolarni tuzatish</li>
+            <li>admin huquqlarini sozlash</li>
+            <li>foydalanuvchilarni avtorizatsiya qilish</li>
+            <li>yangi funksiyalarni ishlab chiqish</li>
+          </ul>
+        </article>
       </section>
     </div>
   );

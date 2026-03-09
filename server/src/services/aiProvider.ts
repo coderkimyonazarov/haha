@@ -5,7 +5,33 @@ export type TutorResponse = {
   mode: "gemini" | "openai" | "openrouter" | "groq" | "mock";
 };
 
-export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
+type TutorPromptInput =
+  | string
+  | {
+      systemPrompt: string;
+      userPrompt: string;
+    };
+
+function normalizePromptInput(input: TutorPromptInput) {
+  if (typeof input === "string") {
+    return {
+      systemPrompt: "",
+      userPrompt: input,
+      merged: input,
+    };
+  }
+
+  const merged = [input.systemPrompt, input.userPrompt].filter(Boolean).join("\n\n");
+  return {
+    systemPrompt: input.systemPrompt,
+    userPrompt: input.userPrompt,
+    merged,
+  };
+}
+
+export async function sendTutorPrompt(input: TutorPromptInput): Promise<TutorResponse> {
+  const normalized = normalizePromptInput(input);
+
   // 1. Try OpenRouter
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   if (openRouterKey && openRouterKey !== "your_openrouter_api_key_here") {
@@ -18,7 +44,12 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
         },
         body: JSON.stringify({
           model: "google/gemini-2.0-flash-lite-preview-02-05:free", // explicit free model
-          messages: [{ role: "user", content: prompt }]
+          messages: [
+            ...(normalized.systemPrompt
+              ? [{ role: "system", content: normalized.systemPrompt }]
+              : []),
+            { role: "user", content: normalized.userPrompt },
+          ],
         })
       });
       if (!res.ok) {
@@ -47,7 +78,12 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
         },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile", // Use a widely supported groq model
-          messages: [{ role: "user", content: prompt }]
+          messages: [
+            ...(normalized.systemPrompt
+              ? [{ role: "system", content: normalized.systemPrompt }]
+              : []),
+            { role: "user", content: normalized.userPrompt },
+          ],
         })
       });
       if (!res.ok) {
@@ -79,7 +115,7 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent(normalized.merged);
       const response = await result.response;
       const text = response.text();
 
@@ -96,4 +132,3 @@ export async function sendTutorPrompt(prompt: string): Promise<TutorResponse> {
     mode: "mock",
   };
 }
-

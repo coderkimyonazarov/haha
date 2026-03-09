@@ -1,4 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
+import { getDb, isDatabaseHealthy } from "../db";
+import { auditLogs } from "../db/schema";
 import { AppError, toErrorEnvelope } from "../utils/error";
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
@@ -24,6 +26,35 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     } else {
       console.error(`[${requestId}]`, err);
     }
+  }
+
+  if (!isDatabaseUnavailable && isDatabaseHealthy()) {
+    const errorName = err instanceof Error ? err.name : "UnknownError";
+    const errorMessage = err instanceof Error ? err.message : message;
+    void (async () => {
+      try {
+        const db = getDb();
+        await db.insert(auditLogs).values({
+          userId: req.user?.id ?? null,
+          action: "server_error",
+          metadata: JSON.stringify({
+            code,
+            message: errorMessage,
+            name: errorName,
+            method: req.method,
+            path: req.path,
+            requestId,
+          }),
+          ip:
+            req.headers["x-forwarded-for"]?.toString()?.split(",")[0]?.trim() ||
+            req.socket?.remoteAddress ||
+            null,
+          userAgent: req.headers["user-agent"] ?? null,
+        });
+      } catch {
+        // avoid recursive failures from error handler
+      }
+    })();
   }
 
   const envelope = isDatabaseUnavailable

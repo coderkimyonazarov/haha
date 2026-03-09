@@ -146,11 +146,11 @@ export function getGoogleOAuthErrorMessage(
   const { code, message, msg, error_description } = normalizeError(err);
 
   if (isProviderDisabledError(err) || code.toLowerCase() === "validation_failed") {
-    return "Google sign-in is not enabled for this project yet. Please contact support.";
+    return "Google login hozir yoqilmagan. Supabase Dashboard -> Authentication -> Providers -> Google ni ENABLE qiling.";
   }
 
   if (isRedirectMismatchError(err)) {
-    return "Google redirect URL is not allowed. Please contact support to update OAuth redirect settings.";
+    return "Google redirect URL mos emas. Supabase redirect allow-list va Google OAuth redirect URL sozlamasiga joriy URL ni qo‘shing.";
   }
 
   if (isAuthRateLimitError(err)) {
@@ -181,6 +181,8 @@ export function getGoogleOAuthErrorMessageFromUrl(currentLocation: {
     error_description:
       searchParams.get("error_description") ||
       hashParams.get("error_description") ||
+      searchParams.get("msg") ||
+      hashParams.get("msg") ||
       searchParams.get("message") ||
       hashParams.get("message") ||
       "",
