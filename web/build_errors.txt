@@ -1,0 +1,16 @@
+src/routes/AccountSettings.tsx(360,18): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(360,123): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(381,18): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(381,123): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(407,20): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(407,121): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(446,87): error TS2304: Cannot find name 'Save'.
+src/routes/AccountSettings.tsx(491,82): error TS2304: Cannot find name 'Save'.
+src/routes/AccountSettings.tsx(511,18): error TS2304: Cannot find name 'Label'.
+src/routes/AccountSettings.tsx(511,121): error TS2304: Cannot find name 'Label'.
+src/routes/AiChat.tsx(164,20): error TS2304: Cannot find name 'Label'.
+src/routes/AiChat.tsx(164,131): error TS2304: Cannot find name 'Label'.
+src/routes/AiChat.tsx(177,20): error TS2304: Cannot find name 'Label'.
+src/routes/AiChat.tsx(177,142): error TS2304: Cannot find name 'Label'.
+src/routes/ContentFeed.tsx(172,17): error TS2322: Type '"link" | "secondary"' is not assignable to type '"outline" | "default" | "secondary" | "ghost" | null | undefined'.
+  Type '"link"' is not assignable to type '"outline" | "default" | "secondary" | "ghost" | null | undefined'.

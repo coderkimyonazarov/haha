@@ -217,7 +217,9 @@ export async function apiFetch<T>(
   const headers = new Headers(options.headers || {});
 
   if (!headers.has("Content-Type") && options.body !== undefined) {
-    headers.set("Content-Type", "application/json");
+    if (!(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
   }
 
   if (shouldAttachBearer(authMode)) {

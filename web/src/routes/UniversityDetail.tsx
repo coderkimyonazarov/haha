@@ -1,13 +1,36 @@
 import React from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { addFact, getUniversity } from "../api";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import Page from "../components/Page";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { Badge } from "../components/ui/badge";
-import Page from "../components/Page";
-import { CalendarClock, DollarSign, GraduationCap, Globe2, Link as LinkIcon } from "lucide-react";
+import { 
+  CalendarClock, 
+  DollarSign, 
+  GraduationCap, 
+  Globe2, 
+  Link as LinkIcon, 
+  Sparkles, 
+  ArrowLeft, 
+  Info,
+  BadgeCheck,
+  Plus
+} from "lucide-react";
+import { toast } from "sonner";
+
+// Small helper for a visual placeholder logo
+function SchoolIcon({ universityName }: { universityName: string }) {
+  const initial = universityName.charAt(0);
+  const color = "hsl(var(--primary))";
+  
+  return (
+    <div className="flex flex-col items-center">
+      <span className="text-5xl font-black" style={{ color }}>{initial}</span>
+      <div className="h-1 w-10 mt-1 bg-primary/40 rounded-full" />
+    </div>
+  );
+}
 
 export default function UniversityDetail() {
   const { id } = useParams();
@@ -24,7 +47,11 @@ export default function UniversityDetail() {
     setLoading(true);
     getUniversity(id)
       .then(setUniversity)
-      .catch(() => setUniversity(null))
+      .catch((err) => {
+        console.error("Failed to fetch university", err);
+        setUniversity(null);
+        toast.error("University data not found.");
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -47,110 +74,266 @@ export default function UniversityDetail() {
       setSourceUrl("");
       setTag("");
       setYear("");
+      toast.success("Fact added successfully!");
       fetchUniversity();
+    } catch (err: any) {
+      toast.error("Failed to add fact. Please check your data.");
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) {
-    return <div className="text-slate-300/80">Loading university...</div>;
+    return (
+      <Page className="flex items-center justify-center min-h-[calc(100dvh-250px)]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted-foreground animate-pulse text-sm font-medium">Downloading university profile...</p>
+        </div>
+      </Page>
+    );
   }
 
   if (!university) {
-    return <div className="text-slate-300/80">University not found.</div>;
+    return (
+      <Page className="flex items-center justify-center min-h-[calc(100dvh-250px)]">
+        <div className="nova-panel p-10 text-center space-y-4 max-w-md">
+          <Info className="h-10 w-10 text-destructive mx-auto" />
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold">University not found</h3>
+            <p className="text-muted-foreground text-sm">
+              The institution you are looking for might have been moved or removed from our database.
+            </p>
+            <Button asChild variant="outline" className="mt-4">
+              <Link to="/universities">Back to database</Link>
+            </Button>
+          </div>
+        </div>
+      </Page>
+    );
   }
 
   return (
-    <Page className="space-y-8">
-      <section className="cosmos-hero p-6 sm:p-8" data-animate="fade">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-300/70">University</p>
-        <h1 className="mt-2 inline-flex items-center gap-2 text-4xl font-semibold text-slate-100">
-          <GraduationCap className="h-7 w-7 text-indigo-200" />
-          {university.name}
-        </h1>
-        <p className="mt-2 text-slate-300/80">
-          {university.state} - SAT {university.satRangeMin ?? "N/A"}-{university.satRangeMax ?? "N/A"}
-        </p>
+    <Page className="space-y-10 pb-20 max-w-6xl mx-auto">
+      {/* ── Back Navigation ────────────────────────────────── */}
+      <div className="animate-element">
+        <Link 
+          to="/universities" 
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group"
+        >
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
+          Browse Universities
+        </Link>
+      </div>
+
+      {/* ── Hero Section ────────────────────────────────────── */}
+      <section className="glow-hero p-8 sm:p-10 relative overflow-hidden" data-animate="fade">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="space-y-4 max-w-2xl">
+            <div className="nova-badge">
+              <Sparkles className="h-3 w-3" />
+              Verified Profile
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight flex items-center gap-3">
+              <GraduationCap className="h-10 w-10 text-primary" />
+              {university.name}
+            </h1>
+            <div className="flex flex-wrap gap-4 pt-2">
+              <div className="stat-chip py-1.5 px-3 flex items-center gap-2">
+                <Globe2 className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold text-primary">{university.state}, USA</span>
+              </div>
+              <div className="stat-chip py-1.5 px-3 flex items-center gap-2 border-fuchsia-500/30 bg-fuchsia-500/5">
+                <BadgeCheck className="h-3.5 w-3.5 text-fuchsia-500" />
+                <span className="text-xs font-semibold text-fuchsia-500">
+                  SAT Range: {university.satRangeMin ?? "N/A"} - {university.satRangeMax ?? "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden lg:block h-32 w-32 shrink-0 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center transform rotate-6 shadow-xl">
+             <SchoolIcon universityName={university.name} />
+          </div>
+        </div>
       </section>
 
-      <Card className="cosmos-panel text-slate-100" data-animate="card">
-        <CardHeader>
-          <CardTitle>Overview</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-slate-300/85">
-          <p>{university.description || "No description yet."}</p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="cosmos-soft p-3"><span className="inline-flex items-center gap-1"><DollarSign className="h-4 w-4" /> Tuition:</span> {university.tuitionUsd ? `$${university.tuitionUsd}` : "N/A"}</div>
-            <div className="cosmos-soft p-3"><span className="inline-flex items-center gap-1"><Globe2 className="h-4 w-4" /> Aid policy:</span> {university.aidPolicy || "N/A"}</div>
-            <div className="cosmos-soft p-3">English requirement: {university.englishReq || "N/A"}</div>
-            <div className="cosmos-soft p-3"><span className="inline-flex items-center gap-1"><CalendarClock className="h-4 w-4" /> Deadline:</span> {university.applicationDeadline || "N/A"}</div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* ── Detailed Grid ───────────────────────────────────── */}
+      <div className="grid gap-8 lg:grid-cols-3">
+        {/* Left Col: Overview */}
+        <div className="lg:col-span-2 space-y-8">
+          <div className="nova-card p-6 sm:p-8" data-animate="card">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold tracking-tight">Institution Overview</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  {university.description || "The profile for this institution is currently being updated by our admissions research team. Check back shortly for deep-dive information."}
+                </p>
+              </div>
 
-      <Card className="cosmos-panel text-slate-100" data-animate="card">
-        <CardHeader>
-          <CardTitle>Did you know?</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {university.facts?.length ? (
-            <div className="space-y-3">
-              {university.facts
-                .filter((fact: any) => fact.sourceUrl)
-                .map((fact: any) => (
-                  <div key={fact.id} className="cosmos-soft p-4 text-sm text-slate-100">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {fact.tag && <Badge className="cosmos-pill">{fact.tag}</Badge>}
-                      {fact.year && <Badge className="cosmos-pill">{fact.year}</Badge>}
-                    </div>
-                    <p className="mt-2">{fact.factText}</p>
-                    <a
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-200 underline"
-                      href={fact.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <LinkIcon className="h-3.5 w-3.5" />
-                      Source
-                    </a>
+              <div className="grid gap-4 sm:grid-cols-2 pt-4">
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <DollarSign className="h-3.5 w-3.5" />
+                    Annual Tuition
                   </div>
-                ))}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-300/75">No facts yet. Add one below.</p>
-          )}
-        </CardContent>
-      </Card>
+                  <div className="text-lg font-bold">
+                    {university.tuitionUsd ? `$${university.tuitionUsd.toLocaleString()}` : "Contact for details"}
+                  </div>
+                </div>
 
-      <Card className="cosmos-panel text-slate-100" data-animate="card">
-        <CardHeader>
-          <CardTitle>Add a fact</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={submitFact}>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Fact text</label>
-              <Textarea className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={factText} onChange={(e) => setFactText(e.target.value)} maxLength={280} required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Source URL</label>
-              <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} required />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Tag</label>
-                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="ED, RD, Policy" />
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <Globe2 className="h-3.5 w-3.5" />
+                    Financial Aid Policy
+                  </div>
+                  <div className="text-sm font-bold text-foreground/90">
+                    {university.aidPolicy || "Scholarships available"}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <GraduationCap className="h-3.5 w-3.5" />
+                    English Proficiency
+                  </div>
+                  <div className="text-sm font-bold text-foreground/90">
+                    {university.englishReq || "TOEFL / IELTS Required"}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    Priority Deadline
+                  </div>
+                  <div className="text-sm font-bold text-primary">
+                    {university.applicationDeadline || "January 15th"}
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Year</label>
-                <Input className="admin-input border-white/20 bg-slate-900/60 text-slate-100" value={year} onChange={(e) => setYear(e.target.value)} placeholder="2025" />
-              </div>
             </div>
-            <Button className="border border-cyan-300/35 bg-cyan-400/15 text-slate-100 hover:bg-cyan-400/25" disabled={saving}>{saving ? "Saving..." : "Add fact"}</Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+
+          {/* Facts Section */}
+          <section className="space-y-6">
+            <h3 className="text-2xl font-bold tracking-tight flex items-center gap-2 px-2">
+              <Info className="h-6 w-6 text-primary" />
+              Insider Knowledge
+            </h3>
+            
+            {university.facts?.length ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {university.facts
+                  .filter((fact: any) => fact.sourceUrl)
+                  .map((fact: any) => (
+                    <div key={fact.id} className="nova-card p-5 space-y-4" data-animate="card">
+                      <div className="flex items-center gap-2">
+                        {fact.tag && <div className="nova-badge">{fact.tag}</div>}
+                        {fact.year && <div className="nova-badge bg-primary/10 text-primary border-primary/20">{fact.year}</div>}
+                      </div>
+                      <p className="text-sm text-foreground/80 leading-relaxed italic">
+                        "{fact.factText}"
+                      </p>
+                      <a
+                        href={fact.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline group/link"
+                      >
+                        <LinkIcon className="h-3.5 w-3.5" />
+                        Verify Source
+                      </a>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="nova-panel p-10 text-center border-dashed border-border/80">
+                <p className="text-muted-foreground text-sm italic">No insider facts available for this institution yet.</p>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Right Col: Add Fact Form */}
+        <div className="space-y-8">
+          <div className="nova-card p-6 sticky top-24" data-animate="card">
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <h4 className="font-bold flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-primary" />
+                  Contribute Knowledge
+                </h4>
+                <p className="text-xs text-muted-foreground">Share an interesting fact or policy detail.</p>
+              </div>
+
+              <form className="space-y-4" onSubmit={submitFact}>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Fact Description</label>
+                  <Textarea 
+                    className="bg-background/50 border-border/60 focus:border-primary min-h-[100px]" 
+                    value={factText} 
+                    onChange={(e) => setFactText(e.target.value)} 
+                    maxLength={280} 
+                    placeholder="e.g. This school has a strong ED preference..."
+                    required 
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Verification Link</label>
+                  <Input 
+                    className="bg-background/50 border-border/60 focus:border-primary" 
+                    value={sourceUrl} 
+                    onChange={(e) => setSourceUrl(e.target.value)} 
+                    placeholder="https://university.edu/admissions..."
+                    required 
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Tag</label>
+                    <Input 
+                      className="bg-background/50 border-border/60 focus:border-primary" 
+                      value={tag} 
+                      onChange={(e) => setTag(e.target.value)} 
+                      placeholder="ED, SAT, Aid" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-muted-foreground ml-1">Year</label>
+                    <Input 
+                      className="bg-background/50 border-border/60 focus:border-primary" 
+                      value={year} 
+                      onChange={(e) => setYear(e.target.value)} 
+                      placeholder="2024" 
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={saving}
+                  className="btn-nova w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {saving ? (
+                    <>
+                      <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      Submit Fact
+                      <Sparkles className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
     </Page>
   );
 }

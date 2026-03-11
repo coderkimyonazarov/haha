@@ -1,34 +1,35 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 
-import { checkUsername, setPassword, setUsername } from "../api";
-import { Button } from "../components/ui/button";
+import { checkUsername, setPassword as apiSetPassword, setUsername } from "../api";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { useAuth } from "../lib/auth";
 import { getPostAuthPath } from "../lib/authRedirect";
 import { toast } from "sonner";
-import { CheckCircle2, AlertCircle, Fingerprint } from "lucide-react";
+import { CheckCircle2, AlertCircle, Fingerprint, ArrowRight, Lock } from "lucide-react";
 import gsap from "gsap";
 
 export default function SetUsername() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
   const [username, setUsernameVal] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  const [password, setPasswordVal] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [available, setAvailable] = React.useState<boolean | null>(null);
   const [normalizedUsername, setNormalizedUsername] = React.useState<string | null>(null);
   const [availError, setAvailError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [checking, setChecking] = React.useState(false);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout>>();
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (containerRef.current) {
       gsap.fromTo(
-        containerRef.current.children,
-        { y: 30, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.8, stagger: 0.1, ease: "power3.out" },
+        containerRef.current,
+        { y: 24, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.6, ease: "power3.out" },
       );
     }
   }, []);
@@ -45,9 +46,11 @@ export default function SetUsername() {
       setAvailable(null);
       setNormalizedUsername(null);
       setAvailError(null);
+      setChecking(false);
       return;
     }
 
+    setChecking(true);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
@@ -59,6 +62,8 @@ export default function SetUsername() {
         setAvailable(false);
         setNormalizedUsername(null);
         setAvailError("Could not connect to server");
+      } finally {
+        setChecking(false);
       }
     }, 350);
 
@@ -67,21 +72,17 @@ export default function SetUsername() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!available || !normalizedUsername) {
-      return;
-    }
+    if (!available || !normalizedUsername) return;
 
     setLoading(true);
     try {
       if (password.length >= 8) {
         try {
-          await setPassword(password);
+          await apiSetPassword(password);
         } catch {
           toast.error("Password update failed; username setup will continue.");
         }
       }
-
       await setUsername(normalizedUsername);
       await refreshProfile();
       toast.success("Username saved");
@@ -93,81 +94,148 @@ export default function SetUsername() {
     }
   };
 
+  const statusIcon = checking ? (
+    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+  ) : available === true && normalizedUsername ? (
+    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+  ) : available === false ? (
+    <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+  ) : null;
+
   return (
-    <div className="min-h-screen flex w-full relative overflow-hidden bg-background">
-      <div className="absolute inset-0 auth-split-gradient pointer-events-none opacity-40" />
+    <div className="relative flex min-h-[calc(100dvh-180px)] w-full items-center justify-center overflow-hidden py-8">
+      {/* Ambient glow */}
+      <div
+        className="pointer-events-none absolute inset-0 auth-split-gradient"
+        aria-hidden
+      />
+      <div
+        className="spotlight spotlight-primary pointer-events-none absolute -top-32 left-1/2 -translate-x-1/2 opacity-25 dark:opacity-45 animate-glow-pulse"
+        aria-hidden
+      />
 
-      <div className="flex-1 flex flex-col justify-center items-center p-6 sm:p-12 relative z-10 w-full max-w-7xl mx-auto">
-        <div ref={containerRef} className="w-full max-w-md glass-panel p-8 sm:p-10 rounded-3xl">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <Fingerprint className="w-8 h-8" />
-            </div>
+      <div ref={containerRef} className="relative z-10 w-full max-w-md px-4">
+        {/* Header badge */}
+        <div className="mb-8 flex flex-col items-center gap-4 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/30 bg-primary/12 shadow-[0_0_32px_-8px_hsl(var(--primary)/0.4)]">
+            <Fingerprint className="h-8 w-8 text-primary" />
           </div>
-
-          <div className="text-center space-y-2 mb-8">
-            <h1 className="text-3xl font-bold tracking-tight">Claim Identity</h1>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              Choose a unique username. Uppercase input is accepted and normalized to lowercase.
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              Claim your <span className="text-gradient">identity</span>
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Choose a unique username. Input is normalised: uppercase and spaces are stripped automatically.
             </p>
           </div>
+        </div>
 
+        {/* Form card */}
+        <div className="glow-card p-7 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Username field */}
             <div className="space-y-2">
-              <Label className="font-semibold text-foreground/80">Username</Label>
+              <Label className="text-sm font-semibold">Username</Label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-mono font-medium">@</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-sm font-bold text-primary">
+                  @
+                </span>
                 <Input
-                  className="pl-9 h-12 bg-background/50 focus:bg-background transition-colors"
+                  className="h-12 pl-9 pr-10 font-mono tracking-wide"
                   value={username}
-                  onChange={(e) => setUsernameVal(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, "");
+                    setUsernameVal(v);
+                  }}
                   placeholder="john_doe"
                   maxLength={30}
                   required
+                  autoComplete="username"
+                  autoFocus
                 />
+
+                {/* Status icon */}
+                {statusIcon && (
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center">
+                    {statusIcon}
+                  </span>
+                )}
               </div>
 
-              {username.length > 0 && (
-                <div className="text-xs font-medium h-5 flex items-center mt-1">
-                  {available === null && (
-                    <span className="text-muted-foreground animate-pulse">Checking availability...</span>
-                  )}
-                  {available === true && normalizedUsername && (
-                    <span className="text-emerald-500 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Available as @{normalizedUsername}
-                    </span>
-                  )}
-                  {available === false && (
-                    <span className="text-destructive flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> {availError || "Not available"}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* Status message */}
+              <div className="flex h-5 items-center text-xs font-medium">
+                {checking ? (
+                  <span className="text-muted-foreground">Checking availability...</span>
+                ) : available === true && normalizedUsername ? (
+                  <span className="flex items-center gap-1 text-emerald-500">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Available as @{normalizedUsername}
+                  </span>
+                ) : available === false ? (
+                  <span className="flex items-center gap-1 text-destructive">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    {availError || "Username not available"}
+                  </span>
+                ) : null}
+              </div>
             </div>
 
-            <div className="space-y-2 pt-2">
-              <Label className="font-semibold text-foreground/80">
-                Set Password <span className="text-muted-foreground font-normal">(Optional)</span>
+            {/* Password field */}
+            <div className="space-y-2 border-t border-border/60 pt-5">
+              <Label className="text-sm font-semibold">
+                Set Password{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
               </Label>
-              <Input
-                className="h-12 bg-background/50 focus:bg-background transition-colors"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Create a password"
-                minLength={8}
-              />
-              <p className="text-[11px] text-muted-foreground leading-snug">
-                If you are currently signed in with email/Google, this updates your account password for future email/username login.
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  className="h-12 pl-10 pr-14"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPasswordVal(e.target.value)}
+                  placeholder="Min 8 characters"
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+                  onClick={() => setShowPassword((p) => !p)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+              <p className="text-xs leading-snug text-muted-foreground">
+                If signed in via Google or Telegram, this lets you also sign in with email + password.
               </p>
             </div>
 
-            <Button className="w-full h-12 text-base font-semibold transition-all mt-4 hover:scale-[1.02]" disabled={loading || !available}>
-              {loading ? "Securing Identity..." : "Complete Setup"}
-            </Button>
+            {/* Submit */}
+            <button
+              type="submit"
+              className="btn-nova flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-60"
+              disabled={loading || !available || checking}
+            >
+              {loading ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Complete setup
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
           </form>
         </div>
+
+        {/* Footer note */}
+        <p className="mt-4 text-center text-xs text-muted-foreground/70">
+          Your username is your permanent identifier on Sypev. Choose wisely.
+        </p>
       </div>
     </div>
   );

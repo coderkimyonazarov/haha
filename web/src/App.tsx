@@ -3,7 +3,6 @@ import React from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Menu, Moon, Monitor, Sun, X } from "lucide-react";
 
-import { Button } from "./components/ui/button";
 import BrandSplash from "./components/BrandSplash";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { adminMe, updatePreferences } from "./api";
@@ -30,11 +29,9 @@ import { applyRouteSeo } from "./lib/seo";
 
 function SeoManager() {
   const location = useLocation();
-
   React.useEffect(() => {
     applyRouteSeo(location.pathname);
   }, [location.pathname]);
-
   return null;
 }
 
@@ -47,16 +44,13 @@ function ProtectedRoute({ children }: { children: React.ReactElement }) {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-
   if (!user.username) {
     return <Navigate to="/set-username" replace />;
   }
-
   const isOnboarding = location.pathname === "/onboarding";
   if (user.needsOnboarding && !isOnboarding) {
     return <Navigate to="/onboarding" replace />;
   }
-
   return children;
 }
 
@@ -98,7 +92,6 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   const handleThemeCycle = async () => {
     if (!preferences || themeUpdating) return;
-
     const modes: Array<"light" | "dark" | "system"> = ["light", "dark", "system"];
     const next = modes[(modes.indexOf(preferences.theme) + 1) % modes.length];
     setThemeUpdating(true);
@@ -133,148 +126,191 @@ function Layout({ children }: { children: React.ReactNode }) {
     { to: "/account", label: "Account" },
   ];
 
-  return (
-    <div ref={shellRef} className="admin-cosmos relative min-h-screen overflow-x-clip text-slate-100 transition-colors duration-500">
-      <div className="pointer-events-none absolute inset-0 -z-10 brand-noise opacity-[0.1]" aria-hidden />
+  const isActive = (path: string) =>
+    path === "/dashboard"
+      ? location.pathname === "/dashboard"
+      : location.pathname.startsWith(path);
 
-      <header
-        className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl"
-        data-shell="nav"
-      >
+  return (
+    <div
+      ref={shellRef}
+      className="relative min-h-screen overflow-x-clip bg-background text-foreground transition-colors duration-500"
+    >
+      {/* Ambient background glow orbs */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden>
+        <div
+          className="spotlight spotlight-primary absolute -top-48 left-1/3 animate-glow-pulse opacity-25 dark:opacity-45"
+        />
+        <div
+          className="spotlight spotlight-fuchsia absolute -bottom-48 right-1/4 animate-glow-pulse opacity-15 dark:opacity-35"
+          style={{ animationDelay: "1.8s" }}
+        />
+      </div>
+
+      {/* Navigation */}
+      <header className="nav-glass sticky top-0 z-30" data-shell="nav">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <img
-              src="/brand/sypev-logo.png"
-              alt="Sypev logo"
-              className="h-8 w-auto rounded-md border border-white/25 bg-white px-1.5 py-1 sm:h-9"
-              loading="lazy"
-            />
-            <span className="text-base font-semibold tracking-tight text-slate-100 sm:text-lg">Sypev</span>
+          {/* Brand */}
+          <Link to="/dashboard" className="group flex items-center gap-2.5">
+            <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl border border-primary/25 bg-gradient-to-br from-primary/20 to-[hsl(var(--primary-glow))/20] shadow-[0_0_16px_-4px_hsl(var(--primary)/0.3)] sm:h-9 sm:w-9">
+              <img
+                src="/brand/sypev-logo.png"
+                alt="Sypev logo"
+                className="h-full w-full object-contain"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+              <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-primary select-none">
+                S
+              </span>
+            </div>
+            <span className="text-base font-bold tracking-tight transition-colors group-hover:text-primary sm:text-lg">
+              Sypev
+            </span>
           </Link>
 
           {user ? (
             <>
-              <nav className="hidden items-center gap-1.5 text-sm font-medium xl:flex">
+              {/* Desktop navigation links */}
+              <nav className="hidden items-center gap-0.5 xl:flex" aria-label="Main navigation">
                 {navLinks.map((item) => (
                   <Link
                     key={item.to}
                     to={item.to}
-                    className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-slate-200 transition hover:border-cyan-200/35 hover:bg-cyan-300/10"
+                    className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200 ${
+                      isActive(item.to)
+                        ? "border border-primary/30 bg-primary/12 text-primary shadow-[0_0_12px_-4px_hsl(var(--primary)/0.35)]"
+                        : "border border-transparent text-foreground/65 hover:border-border hover:bg-muted hover:text-foreground"
+                    }`}
                   >
                     {item.label}
                   </Link>
                 ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleThemeCycle}
-                  disabled={themeUpdating || !preferences}
-                  className="gap-2 border border-white/15 bg-white/[0.04] text-slate-100 hover:bg-cyan-300/10"
-                >
-                  {modeIcon}
-                  <span className="capitalize">{preferences?.theme ?? "mode"}</span>
-                </Button>
-                {user.isAdmin === 1 ? (
+                {user.isAdmin === 1 && (
                   <Link
                     to="/admin"
-                    className="rounded-full border border-indigo-200/35 bg-indigo-400/15 px-3 py-1.5 font-semibold text-indigo-100"
+                    className="ml-1 rounded-full border border-primary/35 bg-primary/12 px-3.5 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary/20"
                   >
                     Admin
                   </Link>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={logout}
-                  className="border border-white/15 bg-white/[0.04] text-slate-100 hover:bg-cyan-300/10"
-                >
-                  Log out
-                </Button>
+                )}
               </nav>
 
-              <div className="flex items-center gap-2 xl:hidden">
-                <Button
-                  variant="ghost"
-                  size="sm"
+              {/* Desktop action buttons */}
+              <div className="hidden items-center gap-2 xl:flex">
+                <button
                   onClick={handleThemeCycle}
                   disabled={themeUpdating || !preferences}
-                  className="h-9 w-9 rounded-full border border-white/20 bg-white/[0.04] p-0 text-slate-100"
-                  aria-label="Toggle theme mode"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground/65 transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+                  aria-label="Cycle theme mode"
                 >
                   {modeIcon}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 w-9 rounded-full border border-white/20 bg-white/[0.04] p-0 text-slate-100"
+                </button>
+                <button
+                  onClick={() => void logout()}
+                  className="flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground/65 transition hover:border-destructive/30 hover:bg-destructive/8 hover:text-destructive"
+                >
+                  Sign out
+                </button>
+              </div>
+
+              {/* Mobile action buttons */}
+              <div className="flex items-center gap-2 xl:hidden">
+                <button
+                  onClick={handleThemeCycle}
+                  disabled={themeUpdating || !preferences}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground/65 transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary disabled:opacity-40"
+                  aria-label="Cycle theme"
+                >
+                  {modeIcon}
+                </button>
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground/65 transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary"
                   onClick={() => setMobileMenuOpen((prev) => !prev)}
-                  aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                  aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+                  aria-expanded={mobileMenuOpen}
                 >
                   {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-                </Button>
+                </button>
               </div>
             </>
           ) : (
-            <nav className="flex items-center gap-3">
-              <Link to="/login" className="text-sm font-medium text-slate-200 transition hover:text-cyan-100">
-                Log in
+            <nav className="flex items-center gap-3" aria-label="Auth navigation">
+              <Link
+                to="/login"
+                className="text-sm font-medium text-foreground/70 transition hover:text-foreground"
+              >
+                Sign in
               </Link>
-              <Button asChild size="sm" className="border border-cyan-300/40 bg-cyan-300/10 text-slate-100 hover:bg-cyan-300/20">
-                <Link to="/register">Register</Link>
-              </Button>
+              <Link
+                to="/register"
+                className="btn-nova rounded-full px-4 py-2 text-sm"
+              >
+                Get started
+              </Link>
             </nav>
           )}
         </div>
 
-        {user && mobileMenuOpen ? (
-          <div className="border-t border-white/10 bg-slate-950/85 px-4 py-3 xl:hidden">
-            <div className="mx-auto grid w-full max-w-7xl gap-2 sm:grid-cols-2">
+        {/* Mobile dropdown menu */}
+        {user && mobileMenuOpen && (
+          <div className="border-t border-border/50 bg-card/96 px-4 py-3 backdrop-blur-2xl xl:hidden">
+            <div className="mx-auto grid w-full max-w-7xl grid-cols-2 gap-2 sm:grid-cols-3">
               {navLinks.map((item) => (
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="rounded-xl border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-slate-100 hover:bg-cyan-300/10"
+                  className={`rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                    isActive(item.to)
+                      ? "border border-primary/30 bg-primary/12 text-primary"
+                      : "border border-border bg-muted/40 text-foreground/75 hover:bg-primary/8 hover:text-primary"
+                  }`}
                 >
                   {item.label}
                 </Link>
               ))}
-              {user.isAdmin === 1 ? (
+              {user.isAdmin === 1 && (
                 <Link
                   to="/admin"
-                  className="rounded-xl border border-indigo-200/40 bg-indigo-400/15 px-3 py-2 text-sm font-semibold text-indigo-100 hover:bg-indigo-400/25"
+                  className="rounded-xl border border-primary/35 bg-primary/15 px-3 py-2.5 text-sm font-semibold text-primary"
                 >
-                  Admin
+                  Admin Panel
                 </Link>
-              ) : null}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="justify-start rounded-xl border border-white/15 bg-white/[0.03] text-slate-100 hover:bg-cyan-300/10"
-                onClick={logout}
+              )}
+              <button
+                className="col-span-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm font-medium text-foreground/65 transition hover:border-destructive/30 hover:bg-destructive/8 hover:text-destructive sm:col-span-1"
+                onClick={() => void logout()}
               >
-                Log out
-              </Button>
+                Sign out
+              </button>
             </div>
           </div>
-        ) : null}
+        )}
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:py-10">{children}</main>
+      {/* Page content */}
+      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:py-10">
+        {children}
+      </main>
 
-      <footer className="border-t border-white/10 bg-slate-950/55 py-6">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 text-xs text-slate-300/85 sm:px-6">
-          <p>© {new Date().getFullYear()} Sypev. Precision SAT & admissions platform.</p>
-          <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="transition hover:text-cyan-100">
-              Dashboard
-            </Link>
-            <Link to="/tutor" className="transition hover:text-cyan-100">
-              AI Tutor
-            </Link>
-            <Link to="/account" className="transition hover:text-cyan-100">
-              Settings
-            </Link>
+      {/* Footer */}
+      <footer className="mt-12 border-t border-border/50">
+        <div className="section-divider" />
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted-foreground sm:px-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-5 w-5 items-center justify-center rounded-md border border-primary/25 bg-primary/10">
+              <span className="text-[10px] font-black text-primary">S</span>
+            </div>
+            <p>© {new Date().getFullYear()} Sypev — Precision SAT & admissions platform.</p>
           </div>
+          <nav className="flex items-center gap-4" aria-label="Footer navigation">
+            <Link to="/dashboard" className="transition hover:text-primary">Dashboard</Link>
+            <Link to="/tutor" className="transition hover:text-primary">AI Tutor</Link>
+            <Link to="/universities" className="transition hover:text-primary">Universities</Link>
+            <Link to="/account" className="transition hover:text-primary">Settings</Link>
+          </nav>
         </div>
       </footer>
     </div>

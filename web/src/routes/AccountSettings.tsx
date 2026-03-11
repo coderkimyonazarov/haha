@@ -17,22 +17,31 @@ import {
 import { useAuth } from "../lib/auth";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import {
   getGoogleOAuthErrorMessage,
   getGoogleOAuthErrorMessageFromUrl,
 } from "../lib/authErrors";
 import { toast } from "sonner";
 import { supabase } from "../lib/supabase";
+import Page from "../components/Page";
 import {
   CheckCircle2,
   Copy,
   ExternalLink,
   Loader2,
   Palette,
+  Save,
   Send,
   ShieldCheck,
   Sparkles,
   UserRoundPen,
+  X,
+  Plus,
+  ArrowRight,
+  Info,
+  Smartphone,
+  ShieldAlert
 } from "lucide-react";
 
 const INTEREST_OPTIONS = [
@@ -315,206 +324,283 @@ export default function AccountSettings() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-14 sm:space-y-7 sm:pb-20">
-      <section className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
-        <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">Account Settings</p>
-        <h1 className="mt-2 text-2xl font-extrabold sm:text-3xl">Personalization + identity controls</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Update your theme/persona, interests, and linked providers without breaking unified account
-          mapping.
-        </p>
+    <Page className="max-w-7xl mx-auto space-y-10 pb-20">
+      {/* ── Hero Section ────────────────────────────────────── */}
+      <section className="glow-hero p-8 sm:p-10 relative overflow-hidden" data-animate="fade">
+        <div className="relative z-10 space-y-4">
+          <div className="nova-badge">
+            <ShieldCheck className="h-3 w-3" />
+            Security & Identity
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
+            Account <span className="text-gradient">Hub</span>
+          </h1>
+          <p className="text-muted-foreground text-lg leading-relaxed max-w-2xl">
+            Manage your digital identity, linked providers, and system aesthetic. All your preferences in one unified command center.
+          </p>
+        </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">
-        <div className="space-y-5">
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <Palette className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Appearance</h2>
+      {/* ── Layout Grid ─────────────────────────────────────── */}
+      <div className="grid gap-8 xl:grid-cols-[1.2fr_1fr]">
+        
+        {/* Left Column: Visuals & Interests */}
+        <div className="space-y-8">
+          
+          {/* Appearance Panel */}
+          <div className="nova-card p-6 sm:p-8" data-animate="card">
+            <div className="flex items-center gap-3 mb-8 border-b border-border/40 pb-4">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Palette className="h-5 w-5" />
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight">System Aesthetic</h2>
             </div>
-            <div className="space-y-4">
-              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
-                {(["light", "dark", "system"] as Theme[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setTheme(mode)}
-                    className={`rounded-2xl border px-4 py-3 text-sm font-semibold capitalize ${
-                      theme === mode
-                        ? "border-primary/60 bg-primary/10"
-                        : "border-border/70 hover:border-primary/30"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
+            
+            <div className="space-y-8">
+              {/* Theme Selector */}
+              <div className="space-y-4">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Interface Mode</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(["light", "dark", "system"] as Theme[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setTheme(mode)}
+                      className={`h-12 rounded-xl border flex items-center justify-center font-bold capitalize transition-all ${
+                        theme === mode
+                          ? "border-primary bg-primary/10 text-primary shadow-[0_0_20px_rgba(var(--primary),0.15)]"
+                          : "border-border/60 bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {mode === "system" ? <Sparkles className="h-4 w-4 mr-2" /> : null}
+                      {mode}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                {PERSONA_OPTIONS.map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => setPersona(item.value)}
-                    className={`rounded-2xl border p-4 text-left ${
-                      persona === item.value
-                        ? "border-primary/60 bg-primary/10"
-                        : "border-border/70 hover:border-primary/30"
-                    }`}
-                  >
-                    <p className="font-semibold">{item.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{item.helper}</p>
-                  </button>
-                ))}
+              {/* Persona Selector */}
+              <div className="space-y-4">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Visual Persona</Label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {PERSONA_OPTIONS.map((item) => (
+                    <button
+                      key={item.value}
+                      onClick={() => setPersona(item.value)}
+                      className={`group p-4 rounded-2xl border text-left transition-all ${
+                        persona === item.value
+                          ? "border-primary bg-primary/10 shadow-[0_0_20px_rgba(var(--primary),0.1)]"
+                          : "border-border/60 bg-background/40 hover:border-primary/40"
+                      }`}
+                    >
+                      <p className={`font-bold ${persona === item.value ? 'text-primary' : 'text-foreground'}`}>
+                        {item.label}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-snug">
+                        {item.helper}
+                      </p>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {ACCENTS.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setAccent(item)}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
-                      accent === item
-                        ? "border-primary/60 bg-primary/10 text-primary"
-                        : "border-border/70 hover:border-primary/30"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                ))}
+              {/* Accent & Options */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-4">
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Accent Hue</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {ACCENTS.map((item) => (
+                      <button
+                        key={item}
+                        onClick={() => setAccent(item)}
+                        className={`h-8 px-4 rounded-full border text-[10px] font-black uppercase tracking-wider transition-all ${
+                          accent === item
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border/60 bg-background/40 text-muted-foreground hover:border-primary/40"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={funCardEnabled}
+                      onChange={(e) => setFunCardEnabled(e.target.checked)}
+                    />
+                    <div className={`h-6 w-11 rounded-full transition-colors ${funCardEnabled ? 'bg-primary' : 'bg-muted/40'}`} />
+                    <div className={`absolute top-1 left-1 h-4 w-4 rounded-full bg-white transition-transform ${funCardEnabled ? 'translate-x-5 shadow-lg' : 'translate-x-0'}`} />
+                  </div>
+                  <span className="text-sm font-medium group-hover:text-primary transition-colors">Fun Cards</span>
+                </label>
               </div>
 
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={funCardEnabled}
-                  onChange={(event) => setFunCardEnabled(event.target.checked)}
-                />
-                Enable dashboard fun cards
-              </label>
-
-              <Button className="w-full sm:w-auto" onClick={handleSaveAppearance} disabled={savingAppearance}>
-                {savingAppearance ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save appearance
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Interests</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {INTEREST_OPTIONS.map((interest) => (
-                <button
-                  key={interest}
-                  type="button"
-                  onClick={() => toggleInterest(interest)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
-                    interests.includes(interest)
-                      ? "border-primary/60 bg-primary/10 text-primary"
-                      : "border-border/70 hover:border-primary/30"
-                  }`}
+              <div className="pt-6 border-t border-border/40">
+                <button 
+                  onClick={handleSaveAppearance} 
+                  disabled={savingAppearance}
+                  className="btn-nova w-full sm:w-auto h-12 px-8 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {interest}
+                  {savingAppearance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save Aesthetic
                 </button>
-              ))}
+              </div>
             </div>
-            <Button className="mt-4 w-full sm:w-auto" onClick={handleSaveInterests} disabled={savingInterests}>
-              {savingInterests ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save interests
-            </Button>
           </div>
 
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <UserRoundPen className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Username</h2>
+          {/* Interests Panel */}
+          <div className="nova-card p-6 sm:p-8" data-animate="card">
+            <div className="flex items-center justify-between mb-8 border-b border-border/40 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-fuchsia-500/10 flex items-center justify-center text-fuchsia-500">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <h2 className="text-2xl font-bold tracking-tight">Intellectual Passions</h2>
+              </div>
+              <div className="stat-chip py-1 px-3">
+                <span className="text-[10px] font-bold text-primary">{interests.length}/8</span>
+              </div>
             </div>
-            <form className="flex flex-col gap-3 sm:flex-row" onSubmit={handleSaveUsername}>
-              <Input
-                value={username}
-                onChange={(event) => setUsernameValue(event.target.value)}
-                placeholder="username"
-              />
-              <Button type="submit" className="sm:min-w-[142px]" disabled={savingUsername}>
-                {savingUsername ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save username
-              </Button>
-            </form>
+            
+            <div className="flex flex-wrap gap-2 mb-8">
+              {INTEREST_OPTIONS.map((interest) => {
+                const isSelected = interests.includes(interest);
+                return (
+                  <button
+                    key={interest}
+                    onClick={() => toggleInterest(interest)}
+                    className={`h-10 px-6 rounded-2xl border text-xs font-bold capitalize transition-all flex items-center gap-2 ${
+                      isSelected
+                        ? "border-primary bg-primary/10 text-primary shadow-[0_0_15px_rgba(var(--primary),0.1)]"
+                        : "border-border/60 bg-background/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    }`}
+                  >
+                    {isSelected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                    {interest}
+                  </button>
+                );
+              })}
+            </div>
+            <button 
+              onClick={handleSaveInterests} 
+              disabled={savingInterests}
+              className="btn-nova w-full sm:w-auto h-12 px-8 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {savingInterests ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Sync Interests
+            </button>
           </div>
         </div>
 
-        <div className="space-y-5">
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <h2 className="text-xl font-semibold">Linked providers</h2>
+        {/* Right Column: Identity & Providers */}
+        <div className="space-y-8">
+          
+          {/* Username Control */}
+          <div className="nova-card p-6 sm:p-8" data-animate="card">
+            <div className="flex items-center gap-3 mb-8 border-b border-border/40 pb-4">
+              <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
+                <UserRoundPen className="h-5 w-5" />
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight">Identity</h2>
             </div>
+            
+            <form onSubmit={handleSaveUsername} className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground ml-1">Global Alias</Label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Input
+                    className="h-12 bg-background/50 border-border/60 focus:border-primary rounded-xl"
+                    value={username}
+                    onChange={(e) => setUsernameValue(e.target.value)}
+                    placeholder="Enter your new username..."
+                  />
+                  <button 
+                    type="submit" 
+                    className="btn-nova h-12 px-6 rounded-xl font-bold shrink-0 disabled:opacity-50"
+                    disabled={savingUsername || !username.trim() || username.trim() === user?.username}
+                  >
+                    {savingUsername ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground ml-1">This is how you appear on leaderboards and in-app communications.</p>
+              </div>
+            </form>
+          </div>
+
+          {/* Linked Providers */}
+          <div className="nova-card p-6 sm:p-8" data-animate="card">
+            <div className="flex items-center gap-3 mb-8 border-b border-border/40 pb-4">
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight">Security Gates</h2>
+            </div>
+
             {loadingProviders ? (
-              <div className="py-8 text-center text-muted-foreground">Loading providers...</div>
+              <div className="py-10 text-center text-muted-foreground animate-pulse flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-xs font-bold uppercase tracking-widest">Validating Sessions...</span>
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {(["email", "google", "telegram"] as ProviderKey[]).map((provider) => {
                   const linked = providers.find((row) => row.provider === provider);
                   return (
                     <div
                       key={provider}
-                      className="rounded-2xl border border-border/70 bg-background/70 p-3"
+                      className="p-4 rounded-2xl border border-border/60 bg-background/40 group hover:border-primary/20 transition-all"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold capitalize">{provider}</div>
-                        {linked ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
-                            <CheckCircle2 className="h-4 w-4" />
-                            Linked
-                          </span>
-                        ) : null}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                            linked ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted/30 text-muted-foreground'
+                          }`}>
+                            {provider === 'email' ? <Send className="h-4 w-4" /> : provider === 'google' ? <ShieldCheck className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold capitalize">{provider} Authentication</div>
+                            <div className="text-[10px] text-muted-foreground">Provider Layer</div>
+                          </div>
+                        </div>
+                        {linked && (
+                          <div className="stat-chip py-1 px-3 bg-emerald-500/10 border-emerald-500/20">
+                            <span className="text-[10px] font-black uppercase text-emerald-600">Active</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="mt-2">
+
+                      <div className="flex items-center justify-between gap-4">
                         {provider === "telegram" && !linked ? (
-                          telegramInfo?.enabled ? (
-                            <div id="telegram-link-container" className="min-h-11 overflow-x-auto" />
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              {telegramInfo?.domainMatch === false &&
-                              telegramInfo?.requiredDomain &&
-                              telegramInfo?.currentHost
-                                ? `Bot domain invalid: BotFather /setdomain -> ${telegramInfo.requiredDomain} (current: ${telegramInfo.currentHost})`
-                                : telegramInfo?.error || "Telegram widget unavailable."}
-                            </p>
-                          )
+                          <div id="telegram-link-container" className="h-11 overflow-hidden" />
                         ) : provider === "google" && !linked ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
+                          <button
                             onClick={handleLinkGoogle}
                             disabled={linkingGoogle}
+                            className="text-xs font-bold text-primary hover:underline flex items-center gap-2"
                           >
-                            {linkingGoogle ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            Link Google
-                          </Button>
+                            {linkingGoogle ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                            Connect Google
+                          </button>
                         ) : linked && provider !== "email" ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive"
+                          <button
                             onClick={() => handleUnlink(provider)}
                             disabled={unlinking === provider}
+                            className="text-xs font-bold text-destructive hover:underline flex items-center gap-2"
                           >
-                            {unlinking === provider ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            Unlink
-                          </Button>
+                            {unlinking === provider ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                            Terminate Link
+                          </button>
                         ) : linked && provider === "email" ? (
-                          <p className="text-xs text-muted-foreground">Primary sign-in provider</p>
+                          <p className="text-[10px] font-medium text-muted-foreground flex items-center gap-1.5 italic">
+                            <Info className="h-3 w-3" />
+                            Used for core recovery and system access.
+                          </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground">Not linked</p>
+                          <p className="text-[10px] font-medium text-muted-foreground italic">Integration pending.</p>
                         )}
                       </div>
                     </div>
@@ -524,85 +610,86 @@ export default function AccountSettings() {
             )}
           </div>
 
-          <div className="rounded-3xl border border-border/70 bg-card/70 p-4 sm:p-6">
-            <div className="mb-2 flex items-center gap-2">
-              <Send className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold">Telegram bot</h3>
+          {/* Telegram Bot Details */}
+          <div className="nova-card p-6 sm:p-8" data-animate="card">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                <Send className="h-4 w-4" />
+              </div>
+              <h3 className="font-bold">Neural Sync (Telegram Bot)</h3>
             </div>
-            <p className="text-sm text-muted-foreground">
+            
+            <div className="p-4 rounded-2xl border border-primary/20 bg-primary/5 space-y-4">
+              <p className="text-xs text-foreground/80 leading-relaxed">
+                Connect your Telegram account to receive instant SAT performance alerts, deadline reminders, and AI-curated study material via our neural bot.
+              </p>
+              
               {telegramInfo?.enabled && telegramInfo.botUrl ? (
-                <>
-                  Bot is configured. Open{" "}
-                  <a className="text-primary underline" href={telegramInfo.botUrl} target="_blank" rel="noreferrer">
-                    @{telegramInfo.botUsername}
-                  </a>{" "}
-                  to continue bot actions.
-                </>
+                <a 
+                  href={telegramInfo.botUrl} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary hover:underline"
+                >
+                  Visit Your AI Bot
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
               ) : (
-                telegramInfo?.domainMatch === false &&
-                telegramInfo?.requiredDomain &&
-                telegramInfo?.currentHost
-                  ? `Bot domain invalid. Set BotFather /setdomain to ${telegramInfo.requiredDomain}. Current host: ${telegramInfo.currentHost}.`
-                  : telegramInfo?.error || "Bot is not configured."
+                <div className="flex items-center gap-2 text-xs text-destructive font-bold">
+                  <ShieldAlert className="h-4 w-4" />
+                  Integration Offline
+                </div>
               )}
-            </p>
 
-            <div className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-background/60 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Secure Bot Linking
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Generate one-time token and open Telegram bot with ready deep link. Token expires in 15 minutes.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={handleCreateBotLinkToken}
-                disabled={creatingBotToken}
-              >
-                {creatingBotToken ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Generate secure bot link
-              </Button>
+              <div className="pt-2">
+                <button
+                  onClick={handleCreateBotLinkToken}
+                  disabled={creatingBotToken}
+                  className="w-full h-10 rounded-xl border border-primary/40 bg-background/50 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  {creatingBotToken ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  Generate Secure Access Link
+                </button>
+              </div>
 
-              {botLinkToken ? (
-                <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-foreground">Token</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(botLinkToken.token, "Token")}
-                      className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-1 text-xs hover:bg-background"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy
-                    </button>
+              {botLinkToken && (
+                <div className="space-y-3 pt-3 animate-element">
+                  <div className="p-3 rounded-xl bg-background/80 border border-border/60">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Token Key</span>
+                      <button 
+                        onClick={() => copyToClipboard(botLinkToken.token, "Token")}
+                        className="hover:text-primary transition-colors"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <code className="block text-[10px] font-mono break-all text-foreground/70">
+                      {botLinkToken.token}
+                    </code>
                   </div>
-                  <code className="block break-all rounded-md bg-background px-2 py-1 text-[11px]">
-                    {botLinkToken.token}
-                  </code>
 
-                  {botLinkToken.deepLink ? (
+                  {botLinkToken.deepLink && (
                     <a
                       href={botLinkToken.deepLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:opacity-95"
+                      className="btn-nova w-full h-10 rounded-xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest"
                     >
-                      Open Telegram Bot
-                      <ExternalLink className="h-3.5 w-3.5" />
+                      Initialize Bot Session
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </a>
-                  ) : null}
-
-                  <p className="text-[11px] text-muted-foreground">
-                    Expires: {new Date(botLinkToken.expiresAt).toLocaleString()}
+                  )}
+                  <p className="text-[9px] text-center text-muted-foreground italic">
+                    Universal access token. Expires soon.
                   </p>
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
+
         </div>
-      </section>
-    </div>
+      </div>
+    </Page>
   );
 }
